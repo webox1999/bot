@@ -23,11 +23,12 @@ dp = Dispatcher()
 dp.include_router(start.router)
 dp.include_router(orders.router)
 dp.include_router(garage.router)
+dp.include_router(payments.router)
 dp.include_router(bonuses.router)
 dp.include_router(buttons.router)
 dp.include_router(admin.router)
 dp.include_router(auth.router)
-dp.include_router(payments.router)
+
 
 async def main():
     await dp.start_polling(bot, skip_updates=True)

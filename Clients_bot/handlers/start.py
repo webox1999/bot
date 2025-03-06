@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.config import SERVER_URL  # Абсолютный импорт
 from Clients_bot.utils.helpers import clean_phone_number  # Абсолютный импорт
-from Clients_bot.handlers.keyboards import main_kb
+from Clients_bot.handlers.keyboards import main_kb, unAuth_keyboard
 import logging
 import requests
 
@@ -18,7 +18,7 @@ router = Router()
 
 @router.message(Command("start"))
 async def start(message: types.Message):
-    await message.answer("Привет! Отправь номер телефона 📲 для начала работы с ботом.:", reply_markup=main_kb)
+    await message.answer("Привет! Отправь номер телефона 📲 для начала работы с ботом.:", reply_markup=unAuth_keyboard)
 
 # 🔹 Обработчик номера телефона (вручную) - сейчас отключен
 # @router.message(F.text.regexp(r"^\+?\d{10,15}$"))

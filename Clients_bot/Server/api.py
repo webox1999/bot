@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import requests
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -13,6 +14,9 @@ SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 SESSION.cookies.set("SORT1SESSID", "7b57jh260595ll819hj3fi5o1g")
 
+# Функция для получения даты 180 месяц назад
+def get_default_start_date():
+    return (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
 def get_client_id(phone_number):
     """Ищет клиента по номеру телефона и возвращает всю информацию о нём."""
@@ -111,6 +115,22 @@ def get_client_info():
         "cars": cars,
         "cashback": cashback
     })
+
+@app.route("/get_payments", methods=["GET"])
+def get_payments():
+    # start_date = get_default_start_date()
+    # end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = request.args.get("start")
+    end_date = request.args.get("end")
+    payload = {
+        "action": "get_payments",
+        "from_date": start_date,
+        "to_date":  end_date  # Передаём телефон сразу в запрос
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
 
 
 if __name__ == "__main__":
