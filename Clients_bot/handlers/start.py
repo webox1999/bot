@@ -1,6 +1,6 @@
 # handlers/start.py
 from aiogram import Router, types, F
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, Message
 from aiogram.filters import Command
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.config import SERVER_URL  # Абсолютный импорт
@@ -28,22 +28,26 @@ main_kb = ReplyKeyboardMarkup(
 async def start(message: types.Message):
     await message.answer("Привет! Введи номер телефона клиента 📲 или отправь свой контакт:", reply_markup=main_kb)
 
-# 🔹 Обработчик номера телефона (контакт)
-@router.message(F.text.regexp(r"^\+?\d{10,15}$"))
-async def get_manual_phone(message: types.Message):
-    # Очищаем номер телефона
-    cleaned_phone_number = clean_phone_number(message.text.strip())
+# 🔹 Обработчик номера телефона (вручную) - сейчас отключен
+# @router.message(F.text.regexp(r"^\+?\d{10,15}$"))
+# async def get_manual_phone(message: types.Message):
+#     # Очищаем номер телефона
+#     cleaned_phone_number = clean_phone_number(message.text.strip())
+#
+#     # Сохраняем номер пользователя
+#     user_phone_numbers[message.from_user.id] = cleaned_phone_number
+#     await process_phone(message, cleaned_phone_number)
 
-    # Сохраняем номер пользователя
-    user_phone_numbers[message.from_user.id] = cleaned_phone_number
-    await process_phone(message, cleaned_phone_number)
+# Обработчик для контакта(через отправить контакт)
+@router.message(F.contact)
+async def get_contact_phone(message: Message):
+    """Получает номер телефона из контакта"""
+    if not message.contact:
+        return await message.answer("❌ Не удалось получить номер.")
 
-# 🔹 Обработчик номера телефона (вручную)
+    phone_number = clean_phone_number(message.contact.phone_number)
+    user_phone_numbers[message.from_user.id] = phone_number
 
-@router.message(F.text.regexp(r"^\+?\d{10,15}$"))
-async def get_manual_phone(message: types.Message):
-    phone_number = message.text.strip()
-    user_phone_numbers[message.from_user.id] = phone_number  # Сохраняем номер пользователя
     await process_phone(message, phone_number)
 
 # 🔹 Функция обработки номера телефона

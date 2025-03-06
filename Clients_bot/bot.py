@@ -4,7 +4,8 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
-from handlers import start, orders, garage, bonuses, buttons
+from handlers import start, orders, garage, bonuses, buttons, admin
+
 
 # Добавляем корневую папку проекта в sys.path
 sys.path.append(str(Path(__file__).parent))
@@ -24,6 +25,7 @@ dp.include_router(orders.router)
 dp.include_router(garage.router)
 dp.include_router(bonuses.router)
 dp.include_router(buttons.router)
+dp.include_router(admin.router)
 
 async def main():
     await dp.start_polling(bot, skip_updates=True)
