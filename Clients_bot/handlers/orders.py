@@ -6,6 +6,9 @@ from Clients_bot.handlers.start import user_phone_numbers, logger
 from Clients_bot.utils.delivery import calculate_delivery_date
 from Clients_bot.utils.helpers import split_text
 from Clients_bot.config import SERVER_URL
+from Clients_bot.filters import IsAuthenticated
+
+
 import requests
 
 
@@ -177,16 +180,18 @@ async def show_orders_list(message: types.Message, orders_grouped: dict, only_ac
 
     await send_long_message(message, text, parse_mode="Markdown")
 
+
 # Обрабатываем кнопку "Заказа" //Все остальные кнопки в buttons
 
 # 🔹 Обработчик кнопки "📦 Заказы"
-@router.message(F.text == "📦 Заказы")
+@router.message(F.text == "📦 Заказы", IsAuthenticated())
 async def show_orders(message: types.Message):
     logger.info("📦 Кнопка 'Заказы' нажата!")
+
     phone_number = user_phone_numbers.get(message.from_user.id)
 
     if not phone_number:
-        await message.answer("⛔ Сначала введите номер телефона клиента.")
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.")
         return
 
     try:

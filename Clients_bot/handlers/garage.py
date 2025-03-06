@@ -6,16 +6,18 @@ from Clients_bot.handlers.start import logger
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.helpers import get_field_value
 from Clients_bot.config import SERVER_URL
+from Clients_bot.filters import IsAuthenticated
 
 router = Router()
+
 # 🔹 Обработчик кнопки "Гараж"
 
-@router.message(F.text == "🚗 Гараж")
+@router.message(F.text == "🚗 Гараж", IsAuthenticated())
 async def show_garage(message: types.Message):
     phone_number = user_phone_numbers.get(message.from_user.id)
 
     if not phone_number:
-        await message.answer("⛔ Сначала введите номер телефона клиента.")
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.")
         return
 
     try:

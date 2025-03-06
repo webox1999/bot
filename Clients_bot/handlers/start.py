@@ -5,6 +5,7 @@ from aiogram.filters import Command
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.config import SERVER_URL  # Абсолютный импорт
 from Clients_bot.utils.helpers import clean_phone_number  # Абсолютный импорт
+from Clients_bot.handlers.keyboards import main_kb
 import logging
 import requests
 
@@ -14,19 +15,10 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# Клавиатура с основными кнопками
-main_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🚗 Гараж"), KeyboardButton(text="📦 Заказы")],
-        [KeyboardButton(text="📞 Отправить номер телефона", request_contact=True)],
-        [KeyboardButton(text="✨ Подробнее о бонусах")]
-    ],
-    resize_keyboard=True
-)
 
 @router.message(Command("start"))
 async def start(message: types.Message):
-    await message.answer("Привет! Введи номер телефона клиента 📲 или отправь свой контакт:", reply_markup=main_kb)
+    await message.answer("Привет! Отправь номер телефона 📲 для начала работы с ботом.:", reply_markup=main_kb)
 
 # 🔹 Обработчик номера телефона (вручную) - сейчас отключен
 # @router.message(F.text.regexp(r"^\+?\d{10,15}$"))
@@ -38,22 +30,22 @@ async def start(message: types.Message):
 #     user_phone_numbers[message.from_user.id] = cleaned_phone_number
 #     await process_phone(message, cleaned_phone_number)
 
-# Обработчик для контакта(через отправить контакт)
-@router.message(F.contact)
-async def get_contact_phone(message: Message):
-    """Получает номер телефона из контакта"""
-    if not message.contact:
-        return await message.answer("❌ Не удалось получить номер.")
-
-    phone_number = clean_phone_number(message.contact.phone_number)
-    user_phone_numbers[message.from_user.id] = phone_number
-
-    await process_phone(message, phone_number)
+# Обработчик для контакта(через отправить контакт) - Отключил временно проверка для авторизации
+# @router.message(F.contact)
+# async def get_contact_phone(message: Message):
+#     """Получает номер телефона из контакта"""
+#     if not message.contact:
+#         return await message.answer("❌ Не удалось получить номер.")
+#
+#     phone_number = clean_phone_number(message.contact.phone_number)
+#     user_phone_numbers[message.from_user.id] = phone_number
+#
+#     await process_phone(message, phone_number)
 
 # 🔹 Функция обработки номера телефона
 async def process_phone(message: types.Message, phone_number: str):
     logger.info(f"Получен номер: {phone_number}")
-    await message.answer(f"🔍 Ищу информацию для номера: {phone_number}...")
+    #await message.answer(f"🔍 Ищу информацию для номера: {phone_number}...")
 
     try:
         response = requests.get(SERVER_URL + phone_number)
