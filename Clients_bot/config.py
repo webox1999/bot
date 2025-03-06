@@ -1,4 +1,4 @@
 # config.py
-#BOT_TOKEN = "7549314968:AAH-njx003U11ob-I_TVW9P-6RczZr0VhO0"
-BOT_TOKEN = "7804657950:AAF8-o--b8lh7Js3rugphw0mWSh1CVO8GXg"
+#BOT_TOKEN = ""
+BOT_TOKEN = ""
 SERVER_URL = "http://127.0.0.1:5000/get_client?phone="
