@@ -18,3 +18,6 @@ def save_admins(admins):
 
 def is_admin(user_id):
     return user_id in load_admins()
+
+
+

@@ -101,3 +101,16 @@ async def get_cars(phone_number):
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
+
+def get_info(phone_number):
+    try:
+        response = requests.get(SERVER_URL + phone_number)
+        response.raise_for_status()  # Проверка на ошибки HTTP
+        data = response.json()
+        name = data.get('name', 'Нет данных')
+        client_id = data.get('client_id', 'Нет данных')
+        return name, client_id
+
+    except requests.exceptions.RequestException as e:
+
+        logger.error(f"Ошибка при запросе к API: {e}")

@@ -7,7 +7,7 @@ from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.helpers import get_field_value
 from Clients_bot.config import SERVER_URL
 from Clients_bot.filters import IsAuthenticated
-
+from Clients_bot.handlers.keyboards import unAuth_keyboard
 router = Router()
 
 # 🔹 Обработчик кнопки "Гараж"
@@ -17,7 +17,7 @@ async def show_garage(message: types.Message):
     phone_number = user_phone_numbers.get(message.from_user.id)
 
     if not phone_number:
-        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.")
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
         return
 
     try:

@@ -4,7 +4,7 @@ main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🚗 Гараж"), KeyboardButton(text="📦 Заказы")],
         [KeyboardButton(text="💳 История платежей"), KeyboardButton(text="✨ Подробнее о бонусах")],
-        [KeyboardButton(text="📞 Отправить номер телефона", request_contact=True)]
+        [KeyboardButton(text="📦 Запрос детали")]
 
     ],
     resize_keyboard=True
@@ -21,7 +21,7 @@ payment_menu = ReplyKeyboardMarkup(
 
 unAuth_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📞 Отправить номер телефона", request_contact=True)],
+        [KeyboardButton(text="➡️Войти с помощью номера телефона📞", request_contact=True)],
         [KeyboardButton(text="✨ Подробнее о бонусах")]
     ],
     resize_keyboard=True
@@ -37,6 +37,10 @@ Auth_keyboard = ReplyKeyboardMarkup(
 
 back_keyboard = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="🔙 Назад")]], resize_keyboard=True
+)
+
+cancel_keyboard = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True
 )
 
 register_keyboard = ReplyKeyboardMarkup(

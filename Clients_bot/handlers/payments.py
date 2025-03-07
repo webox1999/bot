@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from Clients_bot.handlers.keyboards import payment_menu
 from Clients_bot.config import API_URL , SERVER_URL
 from Clients_bot.handlers.start import get_bonuses
+from Clients_bot.handlers.keyboards import unAuth_keyboard
 from Clients_bot.utils.storage import user_phone_numbers  # Храним номера пользователей
 import aiohttp
 from datetime import datetime, timedelta
@@ -13,7 +14,7 @@ router = Router()
 async def show_payment_summary(message: types.Message):
     phone_number = user_phone_numbers.get(message.from_user.id)
     if not phone_number:
-        return await message.answer("❌ Вы не авторизованы! Отправьте контакт для входа.")
+        return await message.answer("❌ Вы не авторизованы! Отправьте контакт для входа.", reply_markup=unAuth_keyboard)
 
     await message.answer("⏳ Получаем данные...")
 
