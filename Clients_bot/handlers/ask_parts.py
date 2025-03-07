@@ -2,8 +2,9 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import StateFilter
+from Clients_bot.filters import IsAuthenticated
 from Clients_bot.utils.storage import user_phone_numbers
-from Clients_bot.handlers.keyboards import main_kb, cancel_keyboard, unAuth_keyboard
+from Clients_bot.handlers.keyboards import main_kb, cancel_keyboard_parts, unAuth_keyboard
 from Clients_bot.handlers.start import get_cars, get_info
 from Clients_bot.utils.messaging import send_to_admins
 
@@ -14,7 +15,7 @@ class AskPartState(StatesGroup):
     waiting_for_part_name = State()
 
 # Обработчик кнопки "Запрос детали"
-@router.message(F.text == "📦 Запрос детали")
+@router.message(F.text == "📦 Запрос детали", IsAuthenticated())
 async def ask_for_part_name(message: types.Message, state: FSMContext):
     phone_number = user_phone_numbers.get(message.from_user.id)
 
@@ -23,9 +24,9 @@ async def ask_for_part_name(message: types.Message, state: FSMContext):
         return
     """Запрашивает у пользователя название детали."""
     await state.set_state(AskPartState.waiting_for_part_name)
-    await message.answer("Если ваш 🚗 авто еще не добавлен в гараж, добавьте чтобы поиск детали был точнее.\n 🔍 Введите название детали и  которую хотите найти:", reply_markup=cancel_keyboard)
+    await message.answer("Если ваш 🚗 авто еще не добавлен в гараж, добавьте чтобы поиск детали был точнее.\n 🔍 Введите название детали и  которую хотите найти:", reply_markup=cancel_keyboard_parts)
 
-@router.message(F.text == "❌ Отмена")
+@router.message(F.text == "Вернуться")
 async def cancel_part_request(message: types.Message, state: FSMContext):
     phone_number = user_phone_numbers.get(message.from_user.id)
 
@@ -43,7 +44,7 @@ async def process_part_request(message: types.Message, state: FSMContext, bot):
     """Обрабатывает введённое название детали и отправляет запрос админу."""
     part_name = message.text.strip()
     user_id = str(message.from_user.id)
-    phone_number = user_phone_numbers.get(user_id, "Не указан")
+    phone_number = user_phone_numbers.get(message.from_user.id)
     full_name_tg = message.from_user.full_name
 
     # Получаем авто из гаража (если есть)

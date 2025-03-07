@@ -47,7 +47,6 @@ async def start(message: types.Message):
 # 🔹 Функция обработки номера телефона
 async def process_phone(message: types.Message, phone_number: str):
     logger.info(f"Получен номер: {phone_number}")
-    #await message.answer(f"🔍 Ищу информацию для номера: {phone_number}...")
 
     try:
         response = requests.get(SERVER_URL + phone_number)
@@ -101,6 +100,36 @@ async def get_cars(phone_number):
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
+
+def get_cars_for_delete(phone_number):
+    try:
+        response = requests.get(SERVER_URL + phone_number)
+        response.raise_for_status()  # Проверка на ошибки HTTP
+        data = response.json()
+        cars = {}  # Используем словарь для хранения данных об автомобилях
+
+        if "cars" in data and data["cars"]:
+            for car in data["cars"]:
+                brand = car.get("auto_maker_name", "Неизвестный бренд")
+                model = car.get("auto_model", "Неизвестная модель")
+                vin = car.get("vin", "Нет VIN")
+                car_id = car.get("id", "Нет id")
+
+                # Добавляем данные автомобиля в словарь
+                cars[car_id] = {
+                    "brand": brand,
+                    "model": model,
+                    "vin": vin,
+                    "id": car_id
+                }
+
+        print(cars)
+
+        return cars
+
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка при запросе к API: {e}")
+        return {}
 
 def get_info(phone_number):
     try:

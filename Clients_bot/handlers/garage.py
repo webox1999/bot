@@ -1,14 +1,87 @@
 # handlers/garage.py
 from aiogram import Router, types, F
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import requests
+import aiohttp
 from Clients_bot.handlers.start import logger
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.helpers import get_field_value
-from Clients_bot.config import SERVER_URL
+from Clients_bot.config import SERVER_URL, API_URL
 from Clients_bot.filters import IsAuthenticated
-from Clients_bot.handlers.keyboards import unAuth_keyboard
+from Clients_bot.handlers.start import get_info, get_cars_for_delete
+from Clients_bot.handlers.keyboards import unAuth_keyboard, garage_keyboard, cancel_keyboard_garage
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+
 router = Router()
+
+async def add_car_to_garage(message: types.Message, vin_code: str):
+    """Отправляет VIN-код на API и добавляет авто в гараж."""
+    user_id = str(message.from_user.id)
+
+    # Получаем номер телефона пользователя
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    if not phone_number:
+        return await message.answer("⚠️ Ошибка: Не удалось получить номер телефона.")
+
+    # Получаем client_id
+    name, client_id = get_info(phone_number)
+    if not client_id:
+        return await message.answer("⚠️ Ошибка: Не удалось получить ваш ID. Попробуйте позже.")
+
+    # Формируем URL запроса
+    url = f"{API_URL}/add_car?id={client_id}&vin={vin_code}"
+
+    # Отправляем запрос на API
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+
+                # Проверяем результат
+                if data.get("status") == "ok":
+                    await message.answer(f"✅ Автомобиль с VIN **{vin_code}** успешно добавлен в гараж! 🚗", reply_markup=garage_keyboard)
+                    await show_garage(message)
+                else:
+                    await message.answer(f"❌ Ошибка: {data.get('msg', 'Неизвестная ошибка')}")
+
+            else:
+                await message.answer("⚠️ Ошибка сервера. Попробуйте позже.")
+
+
+async def delete_car_from_garage(message: types.Message, car_id: str):
+    print('Функция удаления запущена')
+    """Отправляет car_id на API и удаляет авто из гаража."""
+    user_id = str(message.from_user.id)
+
+    # Получаем номер телефона пользователя
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    if not phone_number:
+        return await message.answer("⚠️ Ошибка: Не удалось получить номер телефона.")
+
+    # Получаем client_id
+    name, client_id = get_info(phone_number)
+    if not client_id:
+        return await message.answer("⚠️ Ошибка: Не удалось получить ваш ID. Попробуйте позже.")
+
+    # Формируем URL запроса
+    url = f"{API_URL}/car_delete?id={car_id}"
+
+    # Отправляем запрос на API
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+
+                # Проверяем результат
+                if data.get("status") == "ok":
+                    await message.answer(f"✅ Автомобиль с ID **{car_id}** успешно удален из гаража! 🚗", reply_markup=garage_keyboard)
+                    await show_garage(message)
+                else:
+                    await message.answer(f"❌ Ошибка: {data.get('msg', 'Неизвестная ошибка')}")
+
+            else:
+                await message.answer("⚠️ Ошибка сервера. Попробуйте позже.")
 
 # 🔹 Обработчик кнопки "Гараж"
 
@@ -38,14 +111,100 @@ async def show_garage(message: types.Message):
         else:
             text = "⛔ У вас нет зарегистрированных автомобилей."
 
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="🔙 Назад")]
-            ],
-            resize_keyboard=True
-        )
-        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+
+        await message.answer(text, parse_mode="Markdown", reply_markup=garage_keyboard)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
         await message.answer("⛔ Ошибка при получении данных о гараже.")
+
+# Создаем состояние для ожидания VIN-кода
+class AddCarState(StatesGroup):
+    waiting_for_vin = State()
+    waiting_for_car = State(
+
+    )
+# Обработчик кнопки "➕ Добавить авто"
+@router.message(F.text == "➕ Добавить авто")
+async def ask_for_vin(message: types.Message, state: FSMContext):
+    phone_number = user_phone_numbers.get(message.from_user.id)
+
+    if not phone_number:
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
+        return
+    """Запрашивает у пользователя VIN-код для добавления автомобиля."""
+    await state.set_state(AddCarState.waiting_for_vin)
+    await message.answer("🚗 Введите **VIN-код** вашего автомобиля:", reply_markup=cancel_keyboard_garage)
+
+# Обработчик кнопки "➖ Удалить авто"
+@router.message(F.text == "➖ Удалить авто")
+async def choose_car(message: types.Message, state: FSMContext):
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    cars = get_cars_for_delete(phone_number)
+
+    if not phone_number:
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
+        return
+
+
+    await message.answer(f"🚗 Введите **ID** автомобиля который хотите удалить:", reply_markup=cancel_keyboard_garage)
+    # Итерируемся по словарю cars
+    for car_id, car_data in cars.items():
+        id = car_data.get('id')
+        brand = car_data.get('brand')
+        model = car_data.get('model')
+        vin = car_data.get('vin')
+
+        # Формируем текст сообщения
+        text = (
+            f"\n🔹 *ID автомобиля:* {id} ⬅️Нужно вводить для удаления \n"
+            f"   🚘 *Автомобиль:* {brand} {model} {vin}"
+        )
+        await message.answer(f'{text}')
+    """Запрашивает у пользователя ID авто для удаления автомобиля."""
+    await state.set_state(AddCarState.waiting_for_car)
+
+@router.message(AddCarState.waiting_for_car)
+async def process_car_delete(message: types.Message, state: FSMContext):
+    """Получает VIN-код, проверяет его и отправляет запрос на API."""
+    car_id = message.text.strip().upper()
+
+    # Сохраняем car_id и переходим к отправке на API
+    await state.update_data(id=car_id)
+    await message.answer(f"✅ ID-авто **{car_id}** принято. Удаляем данные...", reply_markup=garage_keyboard)
+
+    # Завершаем состояние
+    await state.clear()
+
+    # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
+    await delete_car_from_garage(message, car_id)
+
+@router.message(F.text == "Отмена")
+async def cancel_part_request(message: types.Message, state: FSMContext):
+    phone_number = user_phone_numbers.get(message.from_user.id)
+
+    if not phone_number:
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
+        return
+    await state.clear()
+    await message.answer("🔙 Вы возвращены в Гараж", reply_markup=garage_keyboard)
+
+# Обработчик ввода VIN-кода (Шаг 3)
+@router.message(AddCarState.waiting_for_vin)
+async def process_vin_code(message: types.Message, state: FSMContext):
+    """Получает VIN-код, проверяет его и отправляет запрос на API."""
+    vin_code = message.text.strip().upper()
+
+    # Проверяем длину VIN-кода (17 символов)
+    if len(vin_code) != 17:
+        return await message.answer("⚠️ VIN-код должен содержать 17 символов. Попробуйте еще раз.")
+
+    # Сохраняем VIN и переходим к отправке на API
+    await state.update_data(vin=vin_code)
+    await message.answer(f"✅ VIN-код **{vin_code}** принят. Отправляем данные...", reply_markup=garage_keyboard)
+
+    # Завершаем состояние
+    await state.clear()
+
+    # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
+    await add_car_to_garage(message, vin_code)

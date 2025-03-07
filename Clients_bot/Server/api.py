@@ -18,6 +18,22 @@ SESSION.cookies.set("SORT1SESSID", "7b57jh260595ll819hj3fi5o1g")
 def get_default_start_date():
     return (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
+def get_car_info(vin):
+    """Запрашивает полную информацию о авто."""
+    payload = {"action": "get_car_by_vin", "vin": vin}
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        car_info = response.json().get("car", [])
+
+        if car_info:  # Если клиент найден
+            return {
+                "engine_num": car_info.get("engine_num", 'Нет данных'),
+                "made_date": car_info.get("made_date", 'Нет данных')
+            }
+
+    return None
+
 def get_client_id(phone_number):
     """Ищет клиента по номеру телефона и возвращает всю информацию о нём."""
     payload = {
@@ -160,6 +176,47 @@ def register_client():
     else:
         return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
 
+@app.route("/add_car", methods=["GET"])
+def add_car():
+    # Получаем параметры из запроса
+    vin = request.args.get("vin")  # Может быть None, если не передан
+    client_id = request.args.get("id")
+
+    # Формируем payload
+    car_info = get_car_info(vin)
+    car_engine = car_info["engine_num"]
+    made_date = car_info["made_date"]
+    payload = {
+        "action": "save_company_car",
+        "company_id": client_id,
+        "vin": vin,
+        "engine_num": car_engine,
+        "made_date": made_date
+    }
+
+    # Отправляем POST-запрос
+    response = SESSION.post(URL, json=payload)
+
+    # Возвращаем ответ
+    if response.status_code == 200:
+        car_info = get_car_info(vin)
+        return response.json(), car_info
+
+    else:
+        return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
+
+@app.route("/car_delete", methods=["GET"])
+def car_delete():
+    car_id = request.args.get("id")
+
+    payload = {
+        "action": "delete_company_car",
+        "company_car_id": car_id,
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

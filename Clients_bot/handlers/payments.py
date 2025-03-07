@@ -3,6 +3,7 @@ from Clients_bot.handlers.keyboards import payment_menu
 from Clients_bot.config import API_URL , SERVER_URL
 from Clients_bot.handlers.start import get_bonuses
 from Clients_bot.handlers.keyboards import unAuth_keyboard
+from Clients_bot.filters import IsAuthenticated
 from Clients_bot.utils.storage import user_phone_numbers  # Храним номера пользователей
 import aiohttp
 from datetime import datetime, timedelta
@@ -10,13 +11,11 @@ from datetime import datetime, timedelta
 router = Router()
 
 # 📌 Обработчик кнопки "История платежей" (показывает краткую инфу и меню выбора)
-@router.message(F.text == "💳 История платежей")
+@router.message(F.text == "💳 История платежей", IsAuthenticated())
 async def show_payment_summary(message: types.Message):
     phone_number = user_phone_numbers.get(message.from_user.id)
     if not phone_number:
         return await message.answer("❌ Вы не авторизованы! Отправьте контакт для входа.", reply_markup=unAuth_keyboard)
-
-    await message.answer("⏳ Получаем данные...")
 
     # Получаем zakaz_id пользователя
     user_zakaz_ids = await get_user_zakaz_ids(phone_number)
