@@ -65,3 +65,13 @@ async def process_phone(message: types.Message, phone_number: str):
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
         await message.answer("⛔ Ошибка при подключении к серверу.")
+
+def get_bonuses(phone_number):
+    try:
+        response = requests.get(SERVER_URL + phone_number)
+        response.raise_for_status()  # Проверка на ошибки HTTP
+        data = response.json()
+        bonuses = data.get('cashback', 'Нет данных')
+        return bonuses
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка при запросе к API: {e}")
