@@ -132,6 +132,34 @@ def get_payments():
     if response.status_code == 200:
         return response.json()
 
+@app.route("/register_client", methods=["GET"])
+def register_client():
+    # Получаем параметры из запроса
+    name = request.args.get("name")
+    phone = request.args.get("phone")
+    client_type = request.args.get("type")
+    bonuses = request.args.get("bonuses")
+    vin = request.args.get("vin")  # Может быть None, если не передан
+
+    # Формируем payload
+    payload = {
+        "action": "fast_save_company",
+        "company_name": name,
+        "mphone": phone,
+        "okopf": client_type,
+        "price_type": bonuses,
+        "vin": vin if vin else ""  # Добавляем vin, даже если он не передан
+    }
+
+    # Отправляем POST-запрос
+    response = SESSION.post(URL, json=payload)
+
+    # Возвращаем ответ
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

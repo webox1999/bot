@@ -4,7 +4,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
-from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments
+from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration
 
 
 # Добавляем корневую папку проекта в sys.path
@@ -27,6 +27,7 @@ dp.include_router(payments.router)
 dp.include_router(bonuses.router)
 dp.include_router(buttons.router)
 dp.include_router(admin.router)
+dp.include_router(registration.router)
 dp.include_router(auth.router)
 
 

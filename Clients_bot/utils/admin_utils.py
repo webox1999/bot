@@ -2,7 +2,7 @@ import json
 import os
 
 ADMINS_FILE = 'data/admins.json'
-
+clients_file = "data/sessions.json"
 # Проверяем, существует ли файл, если нет — создаем
 if not os.path.exists(ADMINS_FILE):
     with open(ADMINS_FILE, 'w') as f:

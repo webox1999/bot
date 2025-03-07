@@ -7,7 +7,7 @@ from Clients_bot.utils.delivery import calculate_delivery_date
 from Clients_bot.utils.helpers import split_text
 from Clients_bot.config import SERVER_URL
 from Clients_bot.filters import IsAuthenticated
-
+from Clients_bot.utils.auth import update_last_active
 
 import requests
 

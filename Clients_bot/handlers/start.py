@@ -3,9 +3,11 @@ from aiogram import Router, types, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, Message
 from aiogram.filters import Command
 from Clients_bot.utils.storage import user_phone_numbers
+from Clients_bot.utils.auth import update_last_active
 from Clients_bot.config import SERVER_URL  # Абсолютный импорт
 from Clients_bot.utils.helpers import clean_phone_number  # Абсолютный импорт
 from Clients_bot.handlers.keyboards import main_kb, unAuth_keyboard
+from Clients_bot.utils.helpers import get_field_value
 import logging
 import requests
 
@@ -19,7 +21,7 @@ router = Router()
 @router.message(Command("start"))
 async def start(message: types.Message):
     await message.answer("Привет! Отправь номер телефона 📲 для начала работы с ботом.:", reply_markup=unAuth_keyboard)
-
+    await update_last_active(message.from_user.id)
 # 🔹 Обработчик номера телефона (вручную) - сейчас отключен
 # @router.message(F.text.regexp(r"^\+?\d{10,15}$"))
 # async def get_manual_phone(message: types.Message):
@@ -61,6 +63,7 @@ async def process_phone(message: types.Message, phone_number: str):
         text += f"📊 *Оборот:* {data.get('oborot', 'Нет данных')} ₽\n"
 
         await message.answer(text, parse_mode="Markdown", reply_markup=main_kb)
+        await update_last_active(message.from_user.id)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
@@ -73,5 +76,28 @@ def get_bonuses(phone_number):
         data = response.json()
         bonuses = data.get('cashback', 'Нет данных')
         return bonuses
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка при запросе к API: {e}")
+
+async def get_cars(phone_number):
+    try:
+        response = requests.get(SERVER_URL + phone_number)
+        response.raise_for_status()  # Проверка на ошибки HTTP
+        data = response.json()
+
+        if "cars" in data and data["cars"]:
+            text = "🚗 *Ваш гараж:*\n\n"
+            for car in data["cars"]:
+                text += (
+                    f"🔹 *Марка:* {get_field_value(car, 'auto_maker_name', 'Неизвестный бренд')}\n"
+                    f"   🚘 *Модель:* {get_field_value(car, 'auto_model')}\n"
+                    f"   📅 *Год выпуска:* {get_field_value(car, 'made_year')}\n"
+                    f"   ⚙️ *Двигатель:* {get_field_value(car, 'engine_num')}\n"
+                    f"   🔢 *VIN:* {get_field_value(car, 'vin', 'Нет VIN')}\n\n"
+                )
+        else:
+            text = "⛔ У вас нет зарегистрированных автомобилей."
+        return text
+
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")

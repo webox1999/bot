@@ -1,5 +1,3 @@
-import json
-import os
 import aiohttp
 from aiogram import Router, F, types
 from aiogram.types import Message
@@ -7,43 +5,15 @@ from aiogram.filters import Command
 from Clients_bot.utils.helpers import clean_phone_number
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.handlers.start import process_phone
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton  # Импортируем клавиатуру
-from Clients_bot.handlers.keyboards import unAuth_keyboard
+from Clients_bot.handlers.keyboards import unAuth_keyboard, register_keyboard
+from Clients_bot.config import SERVER_URL
+from Clients_bot.utils.auth import load_sessions, save_sessions, is_authorized
+from Clients_bot.handlers.registration import start_registration
+#from aiogram.types import ReplyKeyboardMarkup, KeyboardButton  # Импортируем клавиатуру
+
+
+
 router = Router()
-
-# Файл для хранения сессий пользователей
-SESSIONS_FILE = "data/sessions.json"
-
-# Проверяем, существует ли файл, если нет – создаем
-if not os.path.exists(SESSIONS_FILE):
-    with open(SESSIONS_FILE, "w") as f:
-        json.dump({"sessions": {}}, f, indent=4)
-
-
-def load_sessions():
-    """Загружает текущие сессии пользователей, автоматически создаёт файл при ошибке"""
-    try:
-        with open(SESSIONS_FILE, "r", encoding="utf-8") as f:  # Добавили encoding="utf-8"
-            data = json.load(f)
-            return data.get("sessions", {})  # Если "sessions" нет, возвращаем пустой словарь
-    except (json.JSONDecodeError, FileNotFoundError):
-        print("⚠️ Ошибка загрузки JSON. Создаю новый файл.")
-        save_sessions({})
-        return {}
-
-
-
-def save_sessions(sessions):
-    """Сохраняет сессии пользователей с нормальной кодировкой"""
-    with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
-        json.dump({"sessions": sessions}, f, indent=4, ensure_ascii=False)
-
-
-def is_authorized(user_id):
-    """Проверяет, авторизован ли пользователь"""
-    sessions = load_sessions()
-    return str(user_id) in sessions
-
 
 async def check_phone(message: Message, phone_number: str):
     """Проверяет номер телефона по API, очищает его и сохраняет сессию"""
@@ -56,7 +26,7 @@ async def check_phone(message: Message, phone_number: str):
     user_phone_numbers[user_id] = phone_number  # Сохранение номера в глобальную переменную
 
     # Проверяем номер в API
-    api_url = f"http://45.87.153.132:8050/get_client?phone={phone_number}"
+    api_url = SERVER_URL + phone_number
     async with aiohttp.ClientSession() as session:
         async with session.get(api_url) as response:
             try:
@@ -65,11 +35,14 @@ async def check_phone(message: Message, phone_number: str):
                 print(f"❌ Ошибка запроса к API: {e}")
                 return await message.answer("🚨 Ошибка сервера. Попробуйте позже.")
 
-    # Если API вернул ошибку, клиент не найден
+    # Если API вернул ошибку, клиент не найден – предлагаем регистрацию
     if data.get("error") == "Клиент не найден":
-        return await message.answer("❌ Ваш номер не найден в базе клиентов. Обратитесь к администратору.")
+        return await message.answer(
+            "🚨 Вашего номера нет в системе. Желаете зарегистрироваться?",
+            reply_markup=register_keyboard
+        )
 
-    # Получаем данные из ответа API
+    # ✅ Клиент найден – продолжаем авторизацию
     client_id = data.get("client_id", "Неизвестно")
     name = data.get("name", "Неизвестно")
 
@@ -88,6 +61,7 @@ async def check_phone(message: Message, phone_number: str):
 
     await message.answer(f"✅ Вы успешно авторизованы!")
     await process_phone(message, phone_number)
+
 
 # Обработчик контакта (автоматическая авторизация)
 @router.message(F.contact)
