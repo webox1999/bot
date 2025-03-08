@@ -107,5 +107,5 @@ async def handle_unauthorized(message: types.Message):
 
     sessions = load_sessions()
     if user_id not in sessions:
-        return await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для входа.s")
+        return await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для входа.", reply_markup=unAuth_keyboard)
 

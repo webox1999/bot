@@ -39,8 +39,20 @@ back_keyboard = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="🔙 Назад")]], resize_keyboard=True
 )
 
-cancel_keyboard = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True
+cancel_keyboard_garage = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="Отмена")]], resize_keyboard=True
+)
+
+cancel_keyboard_parts = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="Вернуться")]], resize_keyboard=True
+)
+
+garage_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="➕ Добавить авто"),KeyboardButton(text="➖ Удалить авто")],
+        [KeyboardButton(text="🔙 Назад")]
+    ],
+    resize_keyboard=True
 )
 
 register_keyboard = ReplyKeyboardMarkup(
