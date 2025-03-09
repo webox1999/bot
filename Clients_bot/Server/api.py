@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
 import requests
 from datetime import datetime, timedelta
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # Постоянные данные
 URL = "https://sort1.pro/api/index.php"
@@ -218,5 +220,44 @@ def car_delete():
     if response.status_code == 200:
         return response.json()
 
+@app.route("/car_info", methods=["GET"])
+def get_car_info_by_id():
+    car_id = request.args.get("id")
+
+    payload = {
+        "action": "get_company_car",
+        "company_car_id": car_id,
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
+
+
+@app.route("/get_brands", methods=["GET"])
+def get_brands():
+
+    payload = {
+        "action": "get_auto_makers",
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
+
+@app.route("/get_models", methods=["GET"])
+def get_models():
+    car_id = request.args.get("id")
+
+    payload = {
+        "action": "get_auto_models",
+        "auto_maker_id": car_id,
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=True)

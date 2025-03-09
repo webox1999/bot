@@ -1,19 +1,39 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from Clients_bot.utils.admin_utils import load_admins
 # Клавиатура с основными кнопками
-main_kb = ReplyKeyboardMarkup(
-    keyboard=[
+
+def main_kb(user_id):
+    admins = load_admins()
+
+    # Базовая клавиатура
+    keyboard = [
         [KeyboardButton(text="🚗 Гараж"), KeyboardButton(text="📦 Заказы")],
         [KeyboardButton(text="💳 История платежей"), KeyboardButton(text="✨ Подробнее о бонусах")],
-        [KeyboardButton(text="📦 Запрос детали")]
+        [KeyboardButton(text="🔍 Запрос детали"), KeyboardButton(text="🚪 Выйти")]
+    ]
 
-    ],
-    resize_keyboard=True
-)
+    # Если пользователь администратор, добавляем кнопку "Админ панель"
+    if user_id in admins:
+        keyboard.append([KeyboardButton(text="Админ панель")])
+
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+
 
 # Меню "История платежей"
 payment_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💵 Платежи"), KeyboardButton(text="💰 Бонусы")],
+        [KeyboardButton(text="🔙 Назад")]
+    ],
+    resize_keyboard=True
+)
+
+# Клавиатура для админов
+admin_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="👥 Онлайн пользователи"), KeyboardButton(text="👑 Список админов")],
+        [KeyboardButton(text="🔎 Проверить клиента"), KeyboardButton(text="📜 Активные запросы")],
+        [KeyboardButton(text="📜 История запросов")],
         [KeyboardButton(text="🔙 Назад")]
     ],
     resize_keyboard=True
@@ -51,6 +71,19 @@ garage_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="➕ Добавить авто"),KeyboardButton(text="➖ Удалить авто")],
         [KeyboardButton(text="🔙 Назад")]
+    ],
+    resize_keyboard=True
+)
+yes_no_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Да"),KeyboardButton(text="Нет")],
+    ],
+    resize_keyboard=True
+)
+
+confirmation_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
     ],
     resize_keyboard=True
 )

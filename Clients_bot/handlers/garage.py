@@ -2,13 +2,14 @@
 from aiogram import Router, types, F
 import requests
 import aiohttp
+from aiogram.utils.keyboard import ReplyKeyboardMarkup, KeyboardButton
 from Clients_bot.handlers.start import logger
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.helpers import get_field_value
 from Clients_bot.config import SERVER_URL, API_URL
 from Clients_bot.filters import IsAuthenticated
 from Clients_bot.handlers.start import get_info, get_cars_for_delete
-from Clients_bot.handlers.keyboards import unAuth_keyboard, garage_keyboard, cancel_keyboard_garage
+from Clients_bot.handlers.keyboards import unAuth_keyboard, garage_keyboard, cancel_keyboard_garage, yes_no_kb
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -49,60 +50,8 @@ async def add_car_to_garage(message: types.Message, vin_code: str):
                 await message.answer("⚠️ Ошибка сервера. Попробуйте позже.")
 
 
-async def delete_car_from_garage(message: types.Message, car_id: str):
-    """Отправляет car_id на API и удаляет авто из гаража."""
-    user_id = str(message.from_user.id)
 
-    # Получаем номер телефона пользователя
-    phone_number = user_phone_numbers.get(message.from_user.id)
-    if not phone_number:
-        return await message.answer("⚠️ Ошибка: Не удалось получить номер телефона.")
 
-    # Получаем client_id
-    name, client_id = get_info(phone_number)
-    if not client_id:
-        return await message.answer("⚠️ Ошибка: Не удалось получить ваш ID. Попробуйте позже.")
-
-    try:
-        # Получаем список автомобилей
-        cars_id = get_cars_for_delete(phone_number)
-        car_found = False  # Флаг для отслеживания, найден ли автомобиль
-
-        # Проверяем, есть ли автомобиль с указанным ID в гараже
-        for car_key, car_data in cars_id.items():
-            check_car_id = car_data.get('id')
-
-            # Приводим оба ID к одному типу (например, строка)
-            if str(check_car_id) == str(car_id):
-                car_found = True
-                break  # Прерываем цикл, так как автомобиль найден
-
-        if not car_found:
-            # Если автомобиль не найден
-            return await message.answer("🚫 Автомобиль с указанным ID не найден в гараже.")
-
-        # Формируем URL запроса для удаления
-        url = f"{API_URL}/car_delete?id={car_id}"
-
-        # Отправляем запрос на API для удаления автомобиля
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    # Успешное удаление
-                    await message.answer(
-                        f"✅ Автомобиль с ID **{car_id}** успешно удален из гаража! 🚗",
-                        reply_markup=garage_keyboard,
-                        parse_mode="Markdown"  # Убедитесь, что используете правильный parse_mode
-                    )
-                    await show_garage(message)
-                else:
-                    # Ошибка при удалении
-                    await message.answer("⚠️ Ошибка сервера. Попробуйте позже.")
-
-    except Exception as e:
-        # Логируем ошибку и сообщаем пользователю
-        print(f"Произошла ошибка: {e}")
-        await message.answer("⚠️ Произошла ошибка при удалении автомобиля. Пожалуйста, попробуйте позже.")
 
 # 🔹 Обработчик кнопки "Гараж"
 
@@ -142,9 +91,8 @@ async def show_garage(message: types.Message):
 # Создаем состояние для ожидания VIN-кода
 class AddCarState(StatesGroup):
     waiting_for_vin = State()
-    waiting_for_car = State(
+    waiting_for_car = State()
 
-    )
 # Обработчик кнопки "➕ Добавить авто"
 @router.message(F.text == "➕ Добавить авто", IsAuthenticated())
 async def ask_for_vin(message: types.Message, state: FSMContext):
@@ -156,39 +104,6 @@ async def ask_for_vin(message: types.Message, state: FSMContext):
     """Запрашивает у пользователя VIN-код для добавления автомобиля."""
     await state.set_state(AddCarState.waiting_for_vin)
     await message.answer("🚗 Введите **VIN-код** вашего автомобиля:", reply_markup=cancel_keyboard_garage)
-
-# Обработчик кнопки "➖ Удалить авто"
-@router.message(F.text == "➖ Удалить авто", IsAuthenticated())
-async def choose_car(message: types.Message, state: FSMContext):
-    phone_number = user_phone_numbers.get(message.from_user.id)
-    if not phone_number:
-        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
-        return  # Здесь return есть
-
-    # Получаем список автомобилей
-    cars = get_cars_for_delete(phone_number)
-    if not cars:  # Если автомобилей нет
-        await message.answer("🚫 В вашем гараже нет автомобилей для удаления.", reply_markup=cancel_keyboard_garage)
-        return
-
-    # Итерируемся по словарю cars
-    for car_id, car_data in cars.items():
-        id = car_data.get('id')
-        brand = car_data.get('brand')
-        model = car_data.get('model')
-        vin = car_data.get('vin')
-
-        # Формируем текст сообщения
-        text = (
-            f"\n🔹 *ID автомобиля:* {id} ⬅️Его нужно вводить для удаления \n"
-            f"   🚘 *Автомобиль:* {brand} {model} {vin}"
-        )
-        await message.answer(f'{text}')
-
-    await message.answer(f"🚗 Введите **ID** автомобиля, который хотите удалить:",
-                         reply_markup=cancel_keyboard_garage)
-    """Запрашивает у пользователя ID авто для удаления автомобиля."""
-    await state.set_state(AddCarState.waiting_for_car)
 
 @router.message(AddCarState.waiting_for_car)
 async def process_car_delete(message: types.Message, state: FSMContext):
@@ -204,6 +119,147 @@ async def process_car_delete(message: types.Message, state: FSMContext):
 
     # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
     await delete_car_from_garage(message, car_id)
+
+
+# Определим состояния
+class DeleteCarState(StatesGroup):
+    waiting_for_car_choice = State()
+    waiting_for_car_delete_confirmation = State()
+
+# Обработчик кнопки "➖ Удалить авто"
+@router.message(F.text == "➖ Удалить авто", IsAuthenticated())
+async def choose_car(message: types.Message, state: FSMContext):
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    if not phone_number:
+        await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
+        return
+
+    # Получаем список автомобилей
+    cars = get_cars_for_delete(phone_number)
+    if not cars:
+        await message.answer("🚫 В вашем гараже нет автомобилей для удаления.", reply_markup=cancel_keyboard_garage)
+        return
+
+    formatted_cars = []  # Список для кнопок
+    car_mapping = {}  # Словарь для быстрого поиска ID авто
+
+    # Формируем текст для каждой машины
+    for car_id, car_data in cars.items():
+        brand = car_data.get("brand", "Неизвестный бренд") or "Неизвестный бренд"
+        model = car_data.get("model", "Информация отсутствует") or "Информация отсутствует"
+        vin = car_data.get("vin", "VIN не указан") or "VIN не указан"
+
+        car_text = f"🚗 {brand} {model} | {vin}"
+        formatted_cars.append(car_text)
+        car_mapping[car_text] = car_id  # Связываем текст с ID авто
+
+    # Если у пользователя только 1 авто, пропускаем выбор
+    if len(formatted_cars) == 1:
+        selected_car_text = formatted_cars[0]
+        selected_car_id = car_mapping[selected_car_text]
+        await state.update_data(car_id=selected_car_id)
+        await message.answer(f"🚗 Выбран автомобиль: {selected_car_text}", reply_markup=garage_keyboard)
+        await state.set_state(DeleteCarState.waiting_for_car_delete_confirmation)
+        return await confirm_car_delete(message, state)
+
+    # Создаём клавиатуру с авто
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=car)] for car in formatted_cars],
+        resize_keyboard=True
+    )
+
+    await state.update_data(car_list=car_mapping)
+    await state.set_state(DeleteCarState.waiting_for_car_choice)
+    await message.answer("🚗 Выберите авто для удаления:", reply_markup=keyboard)
+
+# Обработчик выбора автомобиля
+@router.message(DeleteCarState.waiting_for_car_choice)
+async def process_car_choice(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    car_list = user_data.get("car_list", {})
+
+    selected_car_text = message.text
+    if selected_car_text not in car_list:
+        await message.answer("🚫 Выбранный автомобиль не найден. Пожалуйста, выберите автомобиль из списка.")
+        return
+
+    selected_car_id = car_list[selected_car_text]
+    await state.update_data(car_id=selected_car_id)
+    await message.answer(f"🚗 Выбран автомобиль: {selected_car_text}", reply_markup=garage_keyboard)
+    await state.set_state(DeleteCarState.waiting_for_car_delete_confirmation)
+    await confirm_car_delete(message, state)
+
+# Подтверждение удаления автомобиля
+async def confirm_car_delete(message: types.Message, state: FSMContext):
+    await message.answer("❓ Вы уверены, что хотите удалить этот автомобиль? (да/нет)", reply_markup=yes_no_kb)
+
+# Обработчик подтверждения удаления
+@router.message(DeleteCarState.waiting_for_car_delete_confirmation)
+async def process_car_delete_confirmation(message: types.Message, state: FSMContext):
+    confirmation = message.text.strip().lower()
+    if confirmation not in ["да", "нет"]:
+        await message.answer("❌ Пожалуйста, ответьте 'да' или 'нет'.")
+        return
+
+    if confirmation == "нет":
+        await message.answer("🚗 Удаление отменено.", reply_markup=garage_keyboard)
+        await state.clear()
+        return
+
+    user_data = await state.get_data()
+    car_id = user_data.get("car_id")
+
+    if not car_id:
+        await message.answer("🚫 Ошибка: Не удалось получить ID автомобиля.")
+        await state.clear()
+        return
+
+    await delete_car_from_garage(message, car_id)
+    await state.clear()
+
+# Функция удаления автомобиля из гаража
+async def delete_car_from_garage(message: types.Message, car_id: str):
+    """Отправляет car_id на API и удаляет авто из гаража."""
+    user_id = str(message.from_user.id)
+
+    # Получаем номер телефона пользователя
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    if not phone_number:
+        return await message.answer("⚠️ Ошибка: Не удалось получить номер телефона.")
+
+    # Получаем client_id
+    name, client_id = get_info(phone_number)
+    if not client_id:
+        return await message.answer("⚠️ Ошибка: Не удалось получить ваш ID. Попробуйте позже.")
+
+    try:
+        # Формируем URL запроса для удаления
+        url = f"{API_URL}/car_delete?id={car_id}"
+
+        # Отправляем запрос на API для удаления автомобиля
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    # Успешное удаление
+                    await message.answer(
+                        f"✅ Автомобиль с ID **{car_id}** успешно удален из гаража! 🚗",
+                        reply_markup=garage_keyboard,
+                        parse_mode="Markdown"
+                    )
+                    await show_garage(message)
+                else:
+                    # Ошибка при удалении
+                    await message.answer("⚠️ Ошибка сервера. Попробуйте позже.")
+
+    except Exception as e:
+        # Логируем ошибку и сообщаем пользователю
+        print(f"Произошла ошибка: {e}")
+        await message.answer("⚠️ Произошла ошибка при удалении автомобиля. Пожалуйста, попробуйте позже.")
+
+
+
+
+
 
 @router.message(F.text == "Отмена", IsAuthenticated())
 async def cancel_part_request(message: types.Message, state: FSMContext):

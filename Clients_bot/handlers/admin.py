@@ -1,10 +1,23 @@
 from Clients_bot.handlers.start import *
 import datetime
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin
 from Clients_bot.handlers.auth import load_sessions
+from Clients_bot.utils.storage import load_part_requests, save_part_requests
+from Clients_bot.filters import IsAuthenticated
+from Clients_bot.handlers.keyboards import admin_keyboard
 
 # Создаем роутер
 router = Router()
+
+@router.message(Command("admin"), IsAuthenticated())
+@router.message(F.text == "Админ панель", IsAuthenticated())
+async def admin_panel(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
+    """Выводит меню админа с клавиатурой"""
+    await message.answer("🔧 *Админ-панель активирована!*\nВыберите действие:", reply_markup=admin_keyboard)
 
 # Команда для добавления админа
 @router.message(Command("add_admin"))
@@ -48,6 +61,7 @@ async def remove_admin(message: Message):
 
 # Команда для просмотра списка админов
 @router.message(Command("who_online"))
+@router.message(F.text == "👑 Список админов")
 async def who_online(message: Message):
     if not is_admin(message.from_user.id):
         return await message.answer("❌ У вас нет прав на выполнение этой команды.")
@@ -61,24 +75,49 @@ async def who_online(message: Message):
 
 
 
-# Команда проверки номера телефона (заглушка, пока без БД)
+# Состояния
+class CheckPhoneState(StatesGroup):
+    waiting_for_phone = State()  # Состояние ожидания ввода номера
+
+# Обработчик команды /check_phone и текста "🔎 Проверить клиента"
 @router.message(Command("check_phone"))
-async def check_phone(message: Message):
+@router.message(F.text == "🔎 Проверить клиента")
+async def check_phone(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return await message.answer("❌ У вас нет прав на выполнение этой команды.")
 
-    try:
-        phone_number = message.text.split()[1]
-    except IndexError:
-        return await message.answer("❌ Использование: /check_phone [номер]")
+    # Если команда вызвана как /check_phone [номер]
+    if message.text.startswith("/check_phone"):
+        try:
+            phone_number = message.text.split()[1]
+            cleaned_phone_number = clean_phone_number(phone_number)
+            await process_phone(message, cleaned_phone_number)
+        except IndexError:
+            await message.answer("❌ Использование: /check_phone [номер]")
+        return
+
+    # Если команда вызвана как "🔎 Проверить клиента"
+    await message.answer("Введите номер клиента:")
+    await state.set_state(CheckPhoneState.waiting_for_phone)  # Переводим в состояние ожидания
+
+# Обработчик ввода номера телефона
+@router.message(CheckPhoneState.waiting_for_phone)
+async def process_phone_input(message: Message, state: FSMContext):
+    phone_number = message.text
+    cleaned_phone_number = clean_phone_number(phone_number)
 
     # Сохраняем номер пользователя
-    cleaned_phone_number = clean_phone_number(phone_number)
     user_phone_numbers[message.from_user.id] = cleaned_phone_number
+
+    # Обрабатываем номер
     await process_phone(message, cleaned_phone_number)
+
+    # Сбрасываем состояние
+    await state.clear()
 
 
 @router.message(Command("users_online"))
+@router.message(F.text == "👥 Онлайн пользователи")
 async def users_online(message: types.Message):
     """Отображает список активных пользователей"""
     if not is_admin(message.from_user.id):
@@ -118,3 +157,144 @@ async def users_online(message: types.Message):
     response_text = "📌 *Список активных пользователей:*\n\n" + "\n".join(online_users)
     await message.answer(response_text, parse_mode="Markdown")
 
+@router.message(Command("requests_list"))
+@router.message(F.text == "📜 Активные запросы")
+async def show_active_requests(message: types.Message):
+    """Показывает список активных запросов на детали."""
+    requests = load_part_requests()
+    active_requests = [req for req in requests if req["status"] == "active"]
+
+    if not active_requests:
+        return await message.answer("✅ Нет активных запросов на детали.")
+
+    text = "📦 <b>Активные запросы:</b>\n\n"
+    for req in active_requests:
+        text += (
+            f"🆔 <b>Запрос:</b> {req['request_id']}\n"
+            f"👤 <b>Клиент:</b> {req['name']}\n"
+            f"📞 <b>Телефон:</b> {req['phone_number']}\n"
+            f"🚗 <b>Авто:</b> {req['car_info']}\n"
+            f"🔍 <b>Деталь:</b> {req['part_name']}\n\n"
+            f"💬 <b>Ответить:</b> /answer_{req['request_id']}\n"
+            f"💬 <b>Отклонить:</b> /cancel_{req['request_id']}\n\n"
+        )
+
+
+    await message.answer(text, parse_mode="HTML")
+
+class AnswerPartRequest(StatesGroup):
+    waiting_for_answer = State()
+    waiting_for_cancel = State()
+
+@router.message(F.text.startswith("/answer_"))
+async def start_answering_request(message: types.Message, state: FSMContext):
+    """Запрашиваем у администратора ответ на запрос."""
+    request_id = message.text.split("_")[1]  # Извлекаем ID запроса
+    requests = load_part_requests()
+
+    request = next((req for req in requests if req["request_id"] == request_id and req["status"] == "active"), None)
+    if not request:
+        return await message.answer("⚠ Запрос уже закрыт или не найден.")
+
+    await state.update_data(request_id=request_id)
+    await state.set_state(AnswerPartRequest.waiting_for_answer)
+    await message.answer(f"✍️ Введите ответ на запрос «{request['part_name']}» от {request['name']}:")
+
+@router.message(AnswerPartRequest.waiting_for_answer)
+async def process_answer(message: types.Message, state: FSMContext, bot):
+    """Отправляем ответ клиенту и обновляем статус запроса."""
+    admin_answer = message.text
+    data = await state.get_data()
+    request_id = data["request_id"]
+
+    requests = load_part_requests()
+    request = next((req for req in requests if req["request_id"] == request_id), None)
+
+    if not request:
+        return await message.answer("⚠ Ошибка! Запрос не найден.")
+
+    # Отправляем клиенту сообщение с ответом
+    client_message = (
+        f"📦 <b>Ответ на ваш запрос:</b>\n"
+        f"🔹 {request['part_name']}\n"
+        f"📩 <b>Сообщение от администратора:</b> {admin_answer}"
+    )
+    # Обновляем статус запроса
+    request["status"] = "answered"
+    request["answer"] = admin_answer
+    save_part_requests(requests)
+    await bot.send_message(request["user_id"], client_message, parse_mode="HTML")
+
+    await message.answer("✅ Ответ отправлен клиенту.", reply_markup=admin_keyboard)
+    await state.clear()
+
+@router.message(F.text.startswith("/cancel_"))
+async def start_answering_request(message: types.Message, state: FSMContext):
+    """Запрашиваем у администратора ответ на запрос."""
+    request_id = message.text.split("_")[1]  # Извлекаем ID запроса
+    requests = load_part_requests()
+
+    request = next((req for req in requests if req["request_id"] == request_id and req["status"] == "active"), None)
+    if not request:
+        return await message.answer("⚠ Запрос уже закрыт или не найден.")
+
+    await state.update_data(request_id=request_id)
+    await state.set_state(AnswerPartRequest.waiting_for_cancel)
+    await message.answer(f"✍️ Введите причину отказа для запроса: «{request['part_name']}» от {request['name']}:")
+
+@router.message(AnswerPartRequest.waiting_for_cancel)
+async def process_closing(message: types.Message, state: FSMContext, bot):
+    """Отправляем ответ клиенту и обновляем статус запроса."""
+    admin_answer = message.text
+    data = await state.get_data()
+    request_id = data["request_id"]
+
+    requests = load_part_requests()
+    request = next((req for req in requests if req["request_id"] == request_id), None)
+
+    if not request:
+        return await message.answer("⚠ Ошибка! Запрос не найден.")
+
+
+
+    # Отправляем клиенту сообщение с ответом
+    client_message = (
+        f"📦 <b>Ваш запрос был отклонен:</b>\n"
+        f"🔹 {request['part_name']}\n"
+        f"📩 <b>Сообщение от администратора:</b> {admin_answer}"
+    )
+
+    # Обновляем статус запроса
+    request["status"] = "closed"
+    request["answer"] = admin_answer
+    save_part_requests(requests)
+
+    await bot.send_message(request["user_id"], client_message, parse_mode="HTML")
+
+    await message.answer("✅ Ответ отправлен клиенту.", reply_markup=admin_keyboard)
+    await state.clear()
+
+@router.message(Command("requests_history"))
+@router.message(F.text == "📜 История запросов")
+async def show_request_history(message: types.Message):
+    """Показывает историю обработанных запросов."""
+    requests = load_part_requests()
+    answered_requests = [req for req in requests if req["status"] in ["answered", "closed"]]
+
+    if not answered_requests:
+        return await message.answer("📂 Нет обработанных запросов.")
+
+    text = "📂 <b>История запросов:</b>\n\n"
+    for req in answered_requests:
+        text += (
+            f"🆔 <b>Запрос:</b> {req['request_id']}\n"
+            f"👤 <b>Клиент:</b> {req['name']}\n"
+            f"📞 <b>Телефон:</b> {req['phone_number']}\n"
+            f"🚗 <b>Авто:</b> {req['car_info']}\n"
+            f"🔍 <b>Деталь:</b> {req['part_name']}\n\n"
+            f"💬 <b>Статус:</b> {req['status']}\n"
+            f"💬 <b>Ответ:</b> {req['answer']}\n\n"
+
+        )
+
+    await message.answer(text, parse_mode="HTML")

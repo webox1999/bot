@@ -9,7 +9,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.order_utils import initialize_orders, check_orders_status
 from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration, ask_parts
-
 initialized_numbers = set()
 
 # Добавляем корневую папку проекта в sys.path

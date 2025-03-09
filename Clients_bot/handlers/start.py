@@ -2,9 +2,11 @@
 from aiogram import Router, types, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, Message
 from aiogram.filters import Command
+from aiohttp import web
+from aiogram.types import WebAppInfo
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.auth import update_last_active
-from Clients_bot.config import SERVER_URL  # Абсолютный импорт
+from Clients_bot.config import SERVER_URL,API_URL  # Абсолютный импорт
 from Clients_bot.utils.helpers import clean_phone_number  # Абсолютный импорт
 from Clients_bot.handlers.keyboards import main_kb, unAuth_keyboard
 from Clients_bot.utils.helpers import get_field_value
@@ -61,12 +63,12 @@ async def process_phone(message: types.Message, phone_number: str):
         text += f"📅 *Дата регистрации:* {data.get('reg_date', 'Нет данных')}\n"
         text += f"📊 *Оборот:* {data.get('oborot', 'Нет данных')} ₽\n"
 
-        await message.answer(text, parse_mode="Markdown", reply_markup=main_kb)
+        await message.answer(text, parse_mode="Markdown", reply_markup=main_kb(message.from_user.id))
         await update_last_active(message.from_user.id)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при запросе к API: {e}")
-        await message.answer("⛔ Ошибка при подключении к серверу.")
+        await message.answer("⛔ Клиент не найден или номер пользователя отсутствует!")
 
 def get_bonuses(phone_number):
     try:
@@ -143,3 +145,15 @@ def get_info(phone_number):
     except requests.exceptions.RequestException as e:
 
         logger.error(f"Ошибка при запросе к API: {e}")
+
+def get_car_info(car_id):
+    try:
+        response = requests.get(f'{API_URL}/car_info?id={car_id}')
+        response.raise_for_status()  # Проверка на ошибки HTTP
+        if response.status_code == 200:
+            return response.json()
+
+    except requests.exceptions.RequestException as e:
+
+        logger.error(f"Ошибка при запросе к API: {e}")
+
