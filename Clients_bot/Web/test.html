@@ -3,16 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Пример с JavaScript</title>
+    <title>Выбор автомобиля</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        select, input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        #brand-info, #model-info {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+    </style>
 </head>
 <body>
-    <h1>Привет, мир!</h1>
-    <button onclick="showAlert()">Нажми меня</button>
+    <h1>Выберите марку и модель автомобиля</h1>
+
+    <!-- Выбор марки -->
+    <label for="brand-select">Марка:</label>
+    <select id="brand-select">
+        <option value="">-- Выберите марку --</option>
+    </select>
+
+    <!-- Выбор модели -->
+    <label for="model-select">Модель:</label>
+    <select id="model-select" disabled>
+        <option value="">-- Сначала выберите марку --</option>
+    </select>
+
+    <!-- Информация о модели -->
+    <div id="model-info"></div>
 
     <script>
-        function showAlert() {
-            alert("JavaScript работает!");
+        // URL вашего API
+        const BRANDS_API_URL = "https://ваш-api.com/get_brands";  // Замените на ваш URL для получения брендов
+        const MODELS_API_URL = "https://ваш-api.com/get_models";  // Замените на ваш URL для получения моделей
+
+        // Элементы DOM
+        const brandSelect = document.getElementById("brand-select");
+        const modelSelect = document.getElementById("model-select");
+        const modelInfo = document.getElementById("model-info");
+
+        // Загружаем список марок при загрузке страницы
+        async function loadBrands() {
+            try {
+                const response = await fetch(BRANDS_API_URL);
+                const data = await response.json();
+
+                // Очищаем список марок
+                brandSelect.innerHTML = "<option value=''>-- Выберите марку --</option>";
+
+                // Заполняем список марок
+                data.auto_makers.forEach(brand => {
+                    const option = document.createElement("option");
+                    option.value = brand.id;
+                    option.textContent = brand.name;
+                    brandSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Ошибка при загрузке марок:", error);
+                brandSelect.innerHTML = "<option value=''>-- Ошибка загрузки --</option>";
+            }
         }
+
+        // Загружаем список моделей для выбранной марки
+        async function loadModels(brandId) {
+            try {
+                const response = await fetch(`${MODELS_API_URL}?id=${brandId}`);
+                const data = await response.json();
+
+                // Очищаем список моделей
+                modelSelect.innerHTML = "<option value=''>-- Выберите модель --</option>";
+
+                // Заполняем список моделей
+                data.auto_models.forEach(model => {
+                    const option = document.createElement("option");
+                    option.value = model.id;
+                    option.textContent = `${model.model} (${model.year})`;
+                    modelSelect.appendChild(option);
+                });
+
+                // Активируем выбор модели
+                modelSelect.disabled = false;
+            } catch (error) {
+                console.error("Ошибка при загрузке моделей:", error);
+                modelSelect.innerHTML = "<option value=''>-- Ошибка загрузки --</option>";
+            }
+        }
+
+        // Отображаем информацию о выбранной модели
+        function showModelInfo(modelId, models) {
+            const selectedModel = models.find(model => model.id === modelId);
+
+            if (selectedModel) {
+                modelInfo.innerHTML = `
+                    <h3>${selectedModel.model}</h3>
+                    <p><strong>Год:</strong> ${selectedModel.year}</p>
+                    <p><strong>Двигатель:</strong> ${selectedModel.engineSalesName}</p>
+                    <p><strong>Мощность:</strong> ${selectedModel.modification_name}</p>
+                `;
+            } else {
+                modelInfo.textContent = "Информация о модели недоступна.";
+            }
+        }
+
+        // Обработчик выбора марки
+        brandSelect.addEventListener("change", async (event) => {
+            const brandId = event.target.value;
+
+            if (!brandId) {
+                modelSelect.disabled = true;
+                modelSelect.innerHTML = "<option value=''>-- Сначала выберите марку --</option>";
+                modelInfo.textContent = "";
+                return;
+            }
+
+            // Загружаем модели для выбранной марки
+            await loadModels(brandId);
+        });
+
+        // Обработчик выбора модели
+        modelSelect.addEventListener("change", async (event) => {
+            const modelId = event.target.value;
+
+            if (!modelId) {
+                modelInfo.textContent = "";
+                return;
+            }
+
+            // Загружаем информацию о модели
+            const response = await fetch(`${MODELS_API_URL}?id=${brandSelect.value}`);
+            const data = await response.json();
+            showModelInfo(modelId, data.auto_models);
+        });
+
+        // Загружаем список марок при загрузке страницы
+        loadBrands();
     </script>
 </body>
 </html>
