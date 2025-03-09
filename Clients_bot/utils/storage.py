@@ -3,8 +3,10 @@ import json
 import os
 
 user_phone_numbers = {}  # Глобальный словарь для хранения номеров телефонов
+verification_codes = {}  # {phone_number: {"code": str, "new_telegram_id": int}}
 
 PART_REQUESTS_FILE = "data/part_requests.json"
+
 
 def load_part_requests():
     """Загружает список запросов на детали."""

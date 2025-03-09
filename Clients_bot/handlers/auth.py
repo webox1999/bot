@@ -1,15 +1,18 @@
 import aiohttp
+import json
 from aiogram import Router, F, types
 from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from Clients_bot.utils.helpers import clean_phone_number
-from Clients_bot.utils.storage import user_phone_numbers
+from Clients_bot.utils.storage import user_phone_numbers, verification_codes
 from Clients_bot.handlers.start import process_phone
-from Clients_bot.handlers.keyboards import unAuth_keyboard, register_keyboard, confirmation_keyboard, main_kb
+from Clients_bot.handlers.keyboards import unAuth_keyboard, register_keyboard, confirmation_keyboard, main_kb, approved_keyboard
+from Clients_bot.utils.admin_utils import is_admin,create_change_request, load_admins
 from Clients_bot.config import SERVER_URL
-from Clients_bot.utils.auth import load_sessions, save_sessions, is_authorized
+from Clients_bot.utils.auth import load_sessions, save_sessions, is_phone_bound, bind_phone_to_user, USERS_FILE, unbind_phone
+from Clients_bot.utils.auth import generate_verification_code, send_verification_code,is_user_bound, get_phone_by_telegram_id
 from Clients_bot.handlers.registration import start_registration
 #from aiogram.types import ReplyKeyboardMarkup, KeyboardButton  # Импортируем клавиатуру
 
@@ -65,21 +68,157 @@ async def check_phone(message: Message, phone_number: str):
     await process_phone(message, phone_number)
 
 
-# Обработчик контакта (автоматическая авторизация)
+class ChangePhoneState(StatesGroup):
+    waiting_for_code = State()  # Состояние ожидания ввода кода
+
 @router.message(F.contact)
-async def get_contact_phone(message: Message):
-    """Получает номер телефона из контакта, очищает его и проверяет в API"""
+async def get_contact_phone(message: Message, bot, state: FSMContext):
+    """Обработчик контакта (автоматическая авторизация)."""
     if not message.contact:
         return await message.answer("❌ Не удалось получить номер.")
 
-    phone_number = clean_phone_number(message.contact.phone_number)  # Очистка номера
-    user_phone_numbers[message.from_user.id] = phone_number  # Сохранение номера в глобальную переменную
+    # Очистка номера
+    phone_number = clean_phone_number(message.contact.phone_number)
 
-    await check_phone(message, phone_number)  # Проверка номера через API
+    # Проверка, является ли пользователь админом
+    if is_admin(message.from_user.id):
+        await message.answer("✅ Доступ разрешен (админ).")
+        await check_phone(message, phone_number)
+        return
+
+    # Проверка, привязан ли telegram_id к какому-либо номеру
+    if is_user_bound(message.from_user.id):
+        # Получаем номер, привязанный к текущему пользователю
+        bound_phone = get_phone_by_telegram_id(message.from_user.id)
+
+        # Если отправленный номер совпадает с привязанным
+        if bound_phone == phone_number:
+            await message.answer("✅ Авторизация успешна!")
+            await check_phone(message, phone_number)
+            return
+        else:
+            # Предложение сменить номер
+            await message.answer(
+                "❌ Ваш аккаунт уже привязан к другому номеру.\n"
+                "Если вы хотите сменить номер, нажмите кнопку ниже.",
+                reply_markup=approved_keyboard
+            )
+            # Сохраняем номер телефона в состоянии
+            await state.update_data(phone_number=phone_number)
+            return
+
+    # Проверка, привязан ли номер к другому аккаунту
+    if is_phone_bound(message.from_user.id, phone_number):
+        # Предложение подтвердить смену номера
+        await message.answer(
+            "❌ Этот номер уже зарегистрирован на другом аккаунте.\n"
+            "Если вы владелец этого номера, нажмите кнопку ниже, чтобы подтвердить смену.",
+            reply_markup=approved_keyboard
+        )
+        # Сохраняем номер телефона в состоянии
+        await state.update_data(phone_number=phone_number)
+        return
+
+    # Если номер не привязан ни к кому, добавляем его
+    if bind_phone_to_user(message.from_user.id, phone_number):
+        await message.answer("✅ Авторизация успешна!")
+        await check_phone(message, phone_number)
+    else:
+        await message.answer("❌ Ошибка при привязке номера.")
+
 
 # Состояния
 class LogoutState(StatesGroup):
     waiting_for_confirmation = State()  # Состояние ожидания подтверждения
+
+    @router.message(F.text == "Подтвердить аккаунт")
+    async def confirm_account_change(message: Message, bot, state: FSMContext):
+        """Обработчик подтверждения смены номера."""
+        data = await state.get_data()
+        phone_number = data.get("phone_number")
+
+        if not phone_number:
+            await message.answer("❌ Ошибка: номер телефона не найден.")
+            return
+
+        # Проверяем, привязан ли номер к другому аккаунту
+        with open(USERS_FILE, "r") as f:
+            users_data = json.load(f)
+
+        old_telegram_id = None
+        for user_id, user_phone in users_data.items():
+            if user_phone == phone_number:
+                old_telegram_id = int(user_id)
+                break
+
+        if old_telegram_id:
+            # Если номер привязан к другому аккаунту, отправляем код подтверждения
+            code = generate_verification_code()
+            verification_codes[phone_number] = {
+                "code": code,
+                "new_telegram_id": message.from_user.id
+            }
+
+            await send_verification_code(bot, old_telegram_id, code)
+            await message.answer("🔐 Код для смены номера был отправлен. Введите его тут.")
+            await state.set_state(ChangePhoneState.waiting_for_code)
+        else:
+            # Если номер новый, создаем запрос на смену
+            client_id = message.from_user.id
+            name = message.from_user.full_name
+            current_phone = get_phone_by_telegram_id(client_id)
+
+            request_id = create_change_request(client_id, current_phone, phone_number, name)
+
+            # Уведомляем админов
+            admins = load_admins()
+            for admin_id in admins:
+                await bot.send_message(
+                    admin_id,
+                    f"Запрос о смене номера:\n"
+                    f"Пользователь: {name}, ID: {client_id}\n"
+                    f"Номер: {current_phone}\n"
+                    f"Новый номер: {phone_number}\n"
+                    f"Подтвердить: /confirm_change_{request_id}\n"
+                    f"Отклонить: /decline_change_{request_id}"
+                )
+
+            await message.answer("✅ Запрос на смену номера отправлен. Дождитесь рассмотрения администратором.", reply_markup=unAuth_keyboard)
+            await state.clear()
+
+@router.message(ChangePhoneState.waiting_for_code)
+async def handle_verification_code(message: Message, state: FSMContext):
+    """Обработчик ввода кода подтверждения."""
+    user_code = message.text.strip()
+
+    # Получаем номер телефона из состояния
+    data = await state.get_data()
+    phone_number = data.get("phone_number")
+
+    if not phone_number:
+        await message.answer("❌ Ошибка: номер телефона не найден.")
+        await state.clear()
+        return
+
+    # Проверка кода
+    if phone_number in verification_codes and user_code == verification_codes[phone_number]["code"]:
+        # Удаляем старую привязку номера
+        unbind_phone(phone_number)
+
+        # Привязываем номер к новому пользователю
+        bind_phone_to_user(message.from_user.id, phone_number)
+
+        await message.answer("✅ Номер успешно изменен!")
+        del verification_codes[phone_number]  # Удаляем код из временного хранилища
+    else:
+        await message.answer("❌ Неверный код. Попробуйте еще раз.")
+
+    await state.clear()
+
+@router.message(F.text == "Отменить")
+async def cancel_registration(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🔙 Вы отменили смену номера.", reply_markup=unAuth_keyboard)
 
 # Обработчик команды /logout и текста "🚪 Выйти"
 @router.message(Command("logout"))

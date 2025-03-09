@@ -2,9 +2,10 @@ from Clients_bot.handlers.start import *
 import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin
+from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin,update_change_request, get_change_requests
 from Clients_bot.handlers.auth import load_sessions
 from Clients_bot.utils.storage import load_part_requests, save_part_requests
+from Clients_bot.utils.auth import bind_phone_to_user
 from Clients_bot.filters import IsAuthenticated
 from Clients_bot.handlers.keyboards import admin_keyboard
 
@@ -298,3 +299,86 @@ async def show_request_history(message: types.Message):
         )
 
     await message.answer(text, parse_mode="HTML")
+
+@router.message(Command("request_change"))
+@router.message(F.text == "📜 Активные запросы(Смена номера)")
+async def show_active_requests(message: Message):
+    """Показывает активные запросы на смену номера."""
+    active_requests = get_change_requests(status="active")
+
+    if not active_requests:
+        await message.answer("Нет активных запросов на смену номера.")
+        return
+
+    for req in active_requests:
+        await message.answer(
+            f"Пользователь: {req['name']}, ID: {req['client_id']}\n"
+            f"Номер: {req['current_phone']}\n"
+            f"Новый номер: {req['new_phone']}\n"
+            f"Подтвердить: /confirm_change_{req['id']}\n"
+            f"Отклонить: /decline_change_{req['id']}"
+        )
+
+@router.message(Command("history_change"))
+@router.message(F.text == "📜 История запросов(Смена номера)")
+async def show_history_requests(message: Message):
+    """Показывает завершенные запросы на смену номера."""
+    history_requests = get_change_requests()
+    history_requests = [req for req in history_requests if req["status"] in ["done", "decline"]]
+
+    if not history_requests:
+        await message.answer("Нет завершенных запросов на смену номера.")
+        return
+
+    for req in history_requests:
+        await message.answer(
+            f"Пользователь: {req['name']}, ID: {req['client_id']}\n"
+            f"Номер: {req['current_phone']}\n"
+            f"Новый номер: {req['new_phone']}\n"
+            f"Статус: {req['status']}"
+        )
+
+@router.message(F.text.startswith("/confirm_change_"))
+async def confirm_change_request(message: Message,bot):
+    """Подтверждает запрос на смену номера."""
+    # Извлекаем request_id из текста сообщения
+    request_id = message.text.split("_")[-1]
+
+    if not request_id:
+        await message.answer("❌ Не указан ID запроса.")
+        return
+
+    # Обновляем статус запроса
+    update_change_request(request_id, status="done")
+    client_message = (
+        f"📦 <b>Ваш запрос на смену номера был подтвержден</b>\n"
+    )
+
+    # Привязываем новый номер
+    requests = get_change_requests()
+    for req in requests:
+        if req["id"] == request_id:
+            bind_phone_to_user(req["client_id"], req["new_phone"])
+            await message.answer(f"✅ Запрос {request_id} подтвержден. Номер изменен.")
+            await bot.send_message(req["client_id"], client_message, parse_mode="HTML")
+            break
+
+@router.message(F.text.startswith("/decline_change_"))
+async def decline_change_request(message: Message, bot):
+    """Отклоняет запрос на смену номера."""
+    # Извлекаем request_id из текста сообщения
+    request_id = message.text.split("_")[-1]
+
+    if not request_id:
+        await message.answer("❌ Не указан ID запроса.")
+        return
+    client_message = (
+        f"📦 <b>Ваш запрос на смену номера был отклонен</b>\n"
+    )
+    # Обновляем статус запроса
+    update_change_request(request_id, status="decline")
+    requests = get_change_requests()
+    for req in requests:
+        if req["id"] == request_id:
+            await bot.send_message(req["client_id"], client_message, parse_mode="HTML")
+            break
