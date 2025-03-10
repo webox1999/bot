@@ -58,7 +58,7 @@ async def check_orders_background():
         sessions = load_sessions()  # Загружаем активные сессии
         if not sessions:
             print("⚠️ Нет активных сессий!")  # Лог, если сессий нет
-            await asyncio.sleep(1800)
+            await asyncio.sleep(600)
             continue
 
         # Проверяем, есть ли новые пользователи
@@ -78,7 +78,7 @@ async def check_orders_background():
                 print(f"📞 Проверяем заказы для {phone_number} (client_id: {client_id})")
                 await check_orders_status(client_id, phone_number, user_id, bot)
 
-        await asyncio.sleep(1800)  # Проверяем каждые 20 секунд
+        await asyncio.sleep(600)  # Проверяем каждые 20 секунд
 
 async def main():
 

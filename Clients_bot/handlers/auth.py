@@ -12,9 +12,9 @@ from Clients_bot.handlers.keyboards import unAuth_keyboard, register_keyboard, c
 from Clients_bot.utils.admin_utils import is_admin,create_change_request, load_admins
 from Clients_bot.config import SERVER_URL
 from Clients_bot.utils.auth import load_sessions, save_sessions, is_phone_bound, bind_phone_to_user, USERS_FILE, unbind_phone
-from Clients_bot.utils.auth import generate_verification_code, send_verification_code,is_user_bound, get_phone_by_telegram_id
-from Clients_bot.handlers.registration import start_registration
-#from aiogram.types import ReplyKeyboardMarkup, KeyboardButton  # Импортируем клавиатуру
+from Clients_bot.utils.auth import generate_verification_code, send_verification_code,is_user_bound, get_phone_by_telegram_id,delete_phone_from_db
+
+
 
 
 
@@ -22,14 +22,15 @@ router = Router()
 
 async def check_phone(message: Message, phone_number: str):
     """Проверяет номер телефона по API, очищает его и сохраняет сессию"""
-    user_id = str(message.from_user.id)
+    user_id = message.from_user.id
+
     username = message.from_user.username or "Не указан"
     full_name_tg = message.from_user.full_name  # Имя в Telegram
 
     # Очищаем номер телефона
     phone_number = clean_phone_number(phone_number)
     user_phone_numbers[user_id] = phone_number  # Сохранение номера в глобальную переменную
-
+    print(f'Получили номер для чек_фона {phone_number} и {user_phone_numbers}')
     # Проверяем номер в API
     api_url = SERVER_URL + phone_number
     async with aiohttp.ClientSession() as session:
@@ -79,7 +80,6 @@ async def get_contact_phone(message: Message, bot, state: FSMContext):
 
     # Очистка номера
     phone_number = clean_phone_number(message.contact.phone_number)
-
     # Проверка, является ли пользователь админом
     if is_admin(message.from_user.id):
         await message.answer("✅ Доступ разрешен (админ).")
@@ -93,7 +93,7 @@ async def get_contact_phone(message: Message, bot, state: FSMContext):
 
         # Если отправленный номер совпадает с привязанным
         if bound_phone == phone_number:
-            await message.answer("✅ Авторизация успешна!")
+            await message.answer("⏳ Подождите идет верификации клиента")
             await check_phone(message, phone_number)
             return
         else:
@@ -121,7 +121,7 @@ async def get_contact_phone(message: Message, bot, state: FSMContext):
 
     # Если номер не привязан ни к кому, добавляем его
     if bind_phone_to_user(message.from_user.id, phone_number):
-        await message.answer("✅ Авторизация успешна!")
+        await message.answer("⏳ Подождите идет верификации клиента")
         await check_phone(message, phone_number)
     else:
         await message.answer("❌ Ошибка при привязке номера.")
@@ -201,10 +201,18 @@ async def handle_verification_code(message: Message, state: FSMContext):
         return
 
     # Проверка кода
+    user_id = str(message.from_user.id)
+    sessions = load_sessions()
     if phone_number in verification_codes and user_code == verification_codes[phone_number]["code"]:
         # Удаляем старую привязку номера
         unbind_phone(phone_number)
-
+        # Удаляем из сессии и переменной
+        if user_id not in sessions:
+            print('Пользователь не найден в сессии')
+        else:
+            del sessions[user_id]
+            save_sessions(sessions)
+            delete_phone_from_db(user_id)
         # Привязываем номер к новому пользователю
         bind_phone_to_user(message.from_user.id, phone_number)
 
@@ -253,14 +261,13 @@ async def confirm_logout(message: Message, state: FSMContext):
         del sessions[user_id]
         save_sessions(sessions)
 
-        # Удаляем номер телефона, если он есть в user_phone_numbers
-        if user_id in user_phone_numbers:
-            removed_phone = user_phone_numbers.pop(user_id)
-
+        delete_phone_from_db(user_id)
         await message.answer(
             "🔴 Вы успешно вышли из системы.\n\nЧтобы войти снова, отправьте свой контакт.",
             reply_markup=unAuth_keyboard  # Показываем клавиатуру для неавторизованных пользователей
         )
+
+        print(user_phone_numbers)
     elif message.text == "Нет":
         await message.answer(
             "🚪 Выход отменен.",

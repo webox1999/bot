@@ -2,12 +2,12 @@ from Clients_bot.handlers.start import *
 import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin,update_change_request, get_change_requests
+from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin,update_change_request, get_change_requests, get_client_id_by_request_id, get_new_users
 from Clients_bot.handlers.auth import load_sessions
 from Clients_bot.utils.storage import load_part_requests, save_part_requests
-from Clients_bot.utils.auth import bind_phone_to_user
+from Clients_bot.utils.auth import bind_phone_to_user, save_sessions, delete_phone_from_db
 from Clients_bot.filters import IsAuthenticated
-from Clients_bot.handlers.keyboards import admin_keyboard
+from Clients_bot.handlers.keyboards import admin_keyboard, admin_request_kb, admin_parts_request_kb, admin_change_request_kb
 
 # Создаем роутер
 router = Router()
@@ -158,9 +158,29 @@ async def users_online(message: types.Message):
     response_text = "📌 *Список активных пользователей:*\n\n" + "\n".join(online_users)
     await message.answer(response_text, parse_mode="Markdown")
 
+@router.message(F.text == "📜 Запросы")
+async def show_requests(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
+    await message.answer("*Меню запросов. Выберите категорию*", reply_markup=admin_request_kb)
+
+@router.message(F.text == "Запросы запчастей клиентов")
+async def show_requests(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
+    await message.answer("*Меню запросов запчастей*", reply_markup=admin_parts_request_kb)
+
+@router.message(F.text == "Запросы смены номера клиентов")
+async def show_requests(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
+    await message.answer("*Меню запросов для смены номера*", reply_markup=admin_change_request_kb)
+
 @router.message(Command("requests_list"))
-@router.message(F.text == "📜 Активные запросы")
+@router.message(F.text == "📜 Активные запросы клиентов")
 async def show_active_requests(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Показывает список активных запросов на детали."""
     requests = load_part_requests()
     active_requests = [req for req in requests if req["status"] == "active"]
@@ -189,6 +209,8 @@ class AnswerPartRequest(StatesGroup):
 
 @router.message(F.text.startswith("/answer_"))
 async def start_answering_request(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Запрашиваем у администратора ответ на запрос."""
     request_id = message.text.split("_")[1]  # Извлекаем ID запроса
     requests = load_part_requests()
@@ -231,6 +253,8 @@ async def process_answer(message: types.Message, state: FSMContext, bot):
 
 @router.message(F.text.startswith("/cancel_"))
 async def start_answering_request(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Запрашиваем у администратора ответ на запрос."""
     request_id = message.text.split("_")[1]  # Извлекаем ID запроса
     requests = load_part_requests()
@@ -276,8 +300,10 @@ async def process_closing(message: types.Message, state: FSMContext, bot):
     await state.clear()
 
 @router.message(Command("requests_history"))
-@router.message(F.text == "📜 История запросов")
+@router.message(F.text == "📜 История запросов клиентов")
 async def show_request_history(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Показывает историю обработанных запросов."""
     requests = load_part_requests()
     answered_requests = [req for req in requests if req["status"] in ["answered", "closed"]]
@@ -301,8 +327,10 @@ async def show_request_history(message: types.Message):
     await message.answer(text, parse_mode="HTML")
 
 @router.message(Command("request_change"))
-@router.message(F.text == "📜 Активные запросы(Смена номера)")
+@router.message(F.text == "📜 Активные запросы клиентов(Смена номера)")
 async def show_active_requests(message: Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Показывает активные запросы на смену номера."""
     active_requests = get_change_requests(status="active")
 
@@ -320,8 +348,10 @@ async def show_active_requests(message: Message):
         )
 
 @router.message(Command("history_change"))
-@router.message(F.text == "📜 История запросов(Смена номера)")
+@router.message(F.text == "📜 История запросов клиентов(Смена номера)")
 async def show_history_requests(message: Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Показывает завершенные запросы на смену номера."""
     history_requests = get_change_requests()
     history_requests = [req for req in history_requests if req["status"] in ["done", "decline"]]
@@ -340,6 +370,8 @@ async def show_history_requests(message: Message):
 
 @router.message(F.text.startswith("/confirm_change_"))
 async def confirm_change_request(message: Message,bot):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Подтверждает запрос на смену номера."""
     # Извлекаем request_id из текста сообщения
     request_id = message.text.split("_")[-1]
@@ -350,21 +382,38 @@ async def confirm_change_request(message: Message,bot):
 
     # Обновляем статус запроса
     update_change_request(request_id, status="done")
-    client_message = (
-        f"📦 <b>Ваш запрос на смену номера был подтвержден</b>\n"
-    )
+
+
+    # Удаляем из сессии и переменной
+    user_id = str(get_client_id_by_request_id(request_id))
+    sessions = load_sessions()
+    if user_id not in sessions:
+        print('Пользователь не найден в сессии')
+    else:
+        del sessions[user_id]
+        save_sessions(sessions)
+        delete_phone_from_db(user_id)
+
+
 
     # Привязываем новый номер
+
     requests = get_change_requests()
     for req in requests:
         if req["id"] == request_id:
             bind_phone_to_user(req["client_id"], req["new_phone"])
+            client_message = (
+                f"📦 <b>Ваш запрос на смену номера был подтвержден</b>\n"
+                f"Новый номер телефона: {req['new_phone']}"
+            )
             await message.answer(f"✅ Запрос {request_id} подтвержден. Номер изменен.")
             await bot.send_message(req["client_id"], client_message, parse_mode="HTML")
             break
 
 @router.message(F.text.startswith("/decline_change_"))
 async def decline_change_request(message: Message, bot):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
     """Отклоняет запрос на смену номера."""
     # Извлекаем request_id из текста сообщения
     request_id = message.text.split("_")[-1]
@@ -382,3 +431,26 @@ async def decline_change_request(message: Message, bot):
         if req["id"] == request_id:
             await bot.send_message(req["client_id"], client_message, parse_mode="HTML")
             break
+
+@router.message(Command("new_users"))
+@router.message(F.text == "👤 Новые клиенты")
+async def show_new_users(message: Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("❌ У вас нет прав на выполнение этой команды.")
+    """Показывает завершенные запросы на смену номера."""
+    show_users = get_new_users()
+
+    if not show_users:
+        await message.answer("Нет новый пользователей")
+        return
+
+    for req in show_users:
+        if isinstance(req, dict):  # Проверяем, что req — это словарь
+            await message.answer(
+                f"Пользователь: {req['name']}, ID: {req['client_id']}\n"
+                f"Номер: {req['phone']}\n"
+                f"Имя в ТГ: {req['tg_name']}\n"
+                f"Telegram ID: {req['tg_id']}"
+            )
+        else:
+            print(f"Ошибка: req не является словарем. Тип req: {type(req)}")

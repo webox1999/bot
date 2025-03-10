@@ -3,10 +3,11 @@ import os
 import datetime
 from pathlib import Path
 import random
-from Clients_bot.handlers.keyboards import approved_keyboard
+from Clients_bot.utils.storage import user_phone_numbers
 
 # Файл для хранения сессий пользователей
 SESSIONS_FILE = "data/sessions.json"
+SESSIONS_CHECKIN = Path("data/sessions.json")
 DATA_PATH = "data/new_users.json"
 USERS_FILE = Path("data/proccessing_users.json")
 
@@ -158,7 +159,6 @@ def unbind_phone(phone_number: str):
 
     # Удаляем все записи, где номер телефона совпадает
     users_data = {user_id: user_phone for user_id, user_phone in users_data.items() if user_phone != phone_number}
-
     # Сохраняем обновленные данные
     with open(USERS_FILE, "w") as f:
         json.dump(users_data, f, indent=4)
@@ -175,3 +175,35 @@ async def send_verification_code(bot, telegram_id: int, code: str):
         text=f"🔐 Код для смены номера: {code}"#,
        # reply_markup=approved_keyboard
     )
+
+def delete_phone_from_db(user_id):
+    # Удаляем номер телефона, если он есть в user_phone_numbers
+    user_id = int(user_id)
+    if user_id in user_phone_numbers:
+        removed_phone = user_phone_numbers.pop(user_id)
+        print(f"Номер {removed_phone} удален для user_id {user_id}")
+
+def auto_check_in():
+    """Загружает user_id и номера телефонов из файла sessions.json в глобальную переменную user_phone_numbers."""
+
+    # Проверяем, существует ли файл
+    if not SESSIONS_CHECKIN.exists():
+        print(f"Файл {SESSIONS_CHECKIN} не найден.")
+        return
+
+    # Читаем данные из файла
+    with open(SESSIONS_CHECKIN, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Извлекаем данные о сессиях
+    sessions = data.get("sessions", {})
+
+    # Проходимся по всем пользователям и добавляем их user_id и номер телефона в user_phone_numbers
+    for user_id, user_data in sessions.items():
+        phone_number = user_data.get("phone")
+        if phone_number:
+            user_phone_numbers[int(user_id)] = phone_number  # Преобразуем user_id в число
+
+    print(f"Данные успешно загружены: {user_phone_numbers}")
+
+auto_check_in()

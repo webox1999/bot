@@ -58,7 +58,7 @@ async def add_car_to_garage(message: types.Message, vin_code: str):
 @router.message(F.text == "🚗 Гараж", IsAuthenticated())
 async def show_garage(message: types.Message):
     phone_number = user_phone_numbers.get(message.from_user.id)
-
+    print(f'Получили номеРа для гаража {phone_number} и {user_phone_numbers}')
     if not phone_number:
         await message.answer("❌ Вы не авторизованы! Пожалуйста, отправьте свой контакт для авторизации.", reply_markup=unAuth_keyboard)
         return

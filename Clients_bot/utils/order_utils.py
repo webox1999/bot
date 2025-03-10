@@ -138,19 +138,21 @@ async def send_order_notifications(user_id: str, new_orders: list, status_change
     for zakaz_id, details in grouped_orders.items():
         message = f"📦 Ваш заказ №{zakaz_id} был создан:\n" + "\n".join(details)
         await bot.send_message(user_id, message)
+        print(f'Сообщение о создание заказа отправлено для {user_id}')
 
     # Уведомления об изменении статусов
     for zakaz_id, changes in status_changes.items():
         message = f"📦 Заказ №{zakaz_id} статус обновлён:\n"
         message += "\n".join([f"🔹 {part} – {get_status_text(status)}" for _, part, status in changes])
         await bot.send_message(user_id, message)
+        print(f'Сообщение о изменении заказа отправлено для {user_id}')
 
     # Уведомления о завершении заказов
     for zakaz_id, changes in completed_orders.items():
         message = f"✅ Заказ №{zakaz_id} завершён:\n"
         message += "\n".join([f"🔹 {part} – {get_status_text(status)}" for _, part, status in changes])
         await bot.send_message(user_id, message)
-
+        print(f'Сообщение о завершение заказа отправлено для {user_id}')
 
 def load_json(filename):
     """Загружает данные из JSON, если файл существует"""
