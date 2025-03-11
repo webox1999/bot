@@ -201,8 +201,37 @@ def add_car():
 
     # Возвращаем ответ
     if response.status_code == 200:
-        car_info = get_car_info(vin)
         return response.json(), car_info
+
+    else:
+        return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
+
+@app.route("/add_by_brand", methods=["GET"])
+def add_by_brand():
+    # Получаем параметры из запроса vin=${VIN}&brand=${brand}&model=${model}&engine=${engineCode}&year=${year}
+    vin = request.args.get("vin")  # Может быть None, если не передан
+    client_id = request.args.get("id")
+    brand = request.args.get("brand")
+    model = request.args.get("model")
+    car_engine = request.args.get("engine")
+    year = request.args.get("year")
+    # Формируем payload
+    payload = {
+        "action": "save_company_car",
+        "company_id": client_id,
+        "vin": vin,
+        "engine_num": car_engine,
+        "made_year": year,
+        "auto_maker_id": brand,
+        "auto_model": model
+    }
+
+    # Отправляем POST-запрос
+    response = SESSION.post(URL, json=payload)
+
+    # Возвращаем ответ
+    if response.status_code == 200:
+        return response.json() , payload
 
     else:
         return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
@@ -257,6 +286,31 @@ def get_models():
 
     if response.status_code == 200:
         return response.json()
+
+@app.route("/get_profit", methods=["GET"])
+def get_profit():
+    phone = request.args.get("phone")
+    start_date = request.args.get("start")
+    end_date = request.args.get("end")
+    data = get_client_id(phone)
+    client_id = data.get("id")
+    client_name = data.get("name")
+    payload = {
+        "action": "get_report_profit",
+        "contragent_id":  client_id,
+        "date_from": start_date,
+        "date_to":  end_date  # Передаём телефон сразу в запрос
+    }
+    response = SESSION.post(URL, json=payload)
+    dealer_sum = response.json().get("dealer_sum")
+    sale_sum = response.json().get("sale_sum")
+    if response.status_code == 200:
+        return jsonify({
+            "client_id": client_id,
+            "name": client_name,
+            "dealer_sum": dealer_sum,
+            "sale_sum": sale_sum
+        })
 
 
 if __name__ == "__main__":

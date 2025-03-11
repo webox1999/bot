@@ -33,8 +33,8 @@ payment_menu = ReplyKeyboardMarkup(
 admin_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="👥 Онлайн пользователи"), KeyboardButton(text="👑 Список админов")],
-        [KeyboardButton(text="🔎 Проверить клиента"), KeyboardButton(text="📜 Запросы")],
-        [KeyboardButton(text="👤 Новые клиенты")],
+        [KeyboardButton(text="🔎 Проверить клиента"), KeyboardButton(text="💲 Доход от клиента")],
+        [KeyboardButton(text="👤 Новые клиенты"), KeyboardButton(text="📜 Запросы")],
         [KeyboardButton(text="🔙 Назад")]
     ],
     resize_keyboard=True

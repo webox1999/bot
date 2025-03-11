@@ -21,7 +21,7 @@ def count_orders(orders):
 
     for order in orders:
         status = int(order.get("status", 0))
-        if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11]:
+        if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11, 35]:
             active_count += 1
         elif status in [70, 101, 102, 200, 201]:
             completed_count += 1
@@ -39,6 +39,7 @@ def get_status_text(status: int):
         21: "🚚 Заказан у поставщика. Ожидается доставка",
         25: "🚚 Товар на складе у поставщика. Ожидается отправка",
         30: "🚚 В пути на склад",
+        35: "🚚 В пути на склад",
         37: "📦 Товар поступил на склад",
         40: "📦 Готов к выдаче",
         41: "✅ Клиент оповещен, товар готов к выдаче",
@@ -127,7 +128,7 @@ def group_orders(orders):
         orders_grouped[zakaz_id]["statuses"].add(status)
         orders_grouped[zakaz_id]["order_cashback"] += order_cashback
         expected_delivery = ""
-        if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11]:
+        if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11, 35]:
             expected_delivery = calculate_delivery_date(zakaz_date_str, delivery_days, deliverer_id)
 
         item_text = (
@@ -157,7 +158,7 @@ async def show_orders_list(message: types.Message, orders_grouped: dict, only_ac
 
     for zakaz_id, data in orders_grouped.items():
         # Фильтруем заказы по статусу
-        if only_active and not any(status in data["statuses"] for status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11]):
+        if only_active and not any(status in data["statuses"] for status in [12, 20, 21, 25, 30, 37, 40, 35, 2, 3, 1, 10, 11, 41]):
             continue
         if only_completed and not all(status == 70 for status in data["statuses"]):
             continue
@@ -253,7 +254,7 @@ async def show_orders(message: types.Message):
 
             # Рассчитываем дату доставки для активных заказов
             expected_delivery = ""
-            if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11]:
+            if status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11, 35]:
                 expected_delivery = calculate_delivery_date(zakaz_date_str, delivery_days, deliverer_id)
 
             # Формируем текст для товара
@@ -269,7 +270,7 @@ async def show_orders(message: types.Message):
 
         # Подсчитываем активные и завершенные заказы
         for zakaz_id, data in orders_grouped.items():
-            if any(status in data["statuses"] for status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11]):
+            if any(status in data["statuses"] for status in [12, 20, 21, 25, 30, 37, 40, 41, 2, 3, 1, 10, 11, 35]):
                 active_count += 1
             elif all(status == 70 for status in data["statuses"]):
                 completed_count += 1

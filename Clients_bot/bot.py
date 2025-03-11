@@ -8,7 +8,7 @@ from Clients_bot.utils.auth import load_sessions
 from aiogram.fsm.storage.memory import MemoryStorage
 from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.order_utils import initialize_orders, check_orders_status
-from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration, ask_parts
+from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration, ask_parts, admin1, add_car_by_brand
 initialized_numbers = set()
 
 # Добавляем корневую папку проекта в sys.path
@@ -27,10 +27,12 @@ dp = Dispatcher(storage=MemoryStorage())
 dp.include_router(start.router)
 dp.include_router(orders.router)
 dp.include_router(garage.router)
+dp.include_router(add_car_by_brand.router)
 dp.include_router(payments.router)
 dp.include_router(bonuses.router)
 dp.include_router(buttons.router)
 dp.include_router(admin.router)
+dp.include_router(admin1.router)
 dp.include_router(registration.router)
 dp.include_router(ask_parts.router)
 dp.include_router(auth.router)
@@ -58,7 +60,7 @@ async def check_orders_background():
         sessions = load_sessions()  # Загружаем активные сессии
         if not sessions:
             print("⚠️ Нет активных сессий!")  # Лог, если сессий нет
-            await asyncio.sleep(600)
+            await asyncio.sleep(3600)
             continue
 
         # Проверяем, есть ли новые пользователи
@@ -78,11 +80,10 @@ async def check_orders_background():
                 print(f"📞 Проверяем заказы для {phone_number} (client_id: {client_id})")
                 await check_orders_status(client_id, phone_number, user_id, bot)
 
-        await asyncio.sleep(600)  # Проверяем каждые 20 секунд
+        await asyncio.sleep(3600)  # Проверяем каждые 20 секунд
 
 async def main():
 
-    #asyncio.create_task(initialize_all_orders())
     asyncio.create_task(check_orders_background())
     await dp.start_polling(bot, skip_updates=True)
 

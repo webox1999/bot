@@ -4,9 +4,10 @@ from Clients_bot.config import API_URL , SERVER_URL
 from Clients_bot.handlers.start import get_bonuses
 from Clients_bot.handlers.keyboards import unAuth_keyboard
 from Clients_bot.filters import IsAuthenticated
+from Clients_bot.utils.helpers import get_default_dates
 from Clients_bot.utils.storage import user_phone_numbers  # Храним номера пользователей
 import aiohttp
-from datetime import datetime, timedelta
+
 
 router = Router()
 
@@ -160,12 +161,6 @@ async def show_full_bonuses(message: types.Message):
 
     await message.answer(bonus_text, parse_mode="Markdown")
 
-
-# Функция для получения даты 180 месяц назад
-def get_default_dates():
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
-    return start_date, end_date
 
 # Функция получения `zakaz_id` пользователя
 async def get_user_zakaz_ids(phone_number):

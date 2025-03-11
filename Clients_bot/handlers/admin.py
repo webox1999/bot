@@ -4,7 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from Clients_bot.utils.admin_utils import load_admins, save_admins, is_admin,update_change_request, get_change_requests, get_client_id_by_request_id, get_new_users
 from Clients_bot.handlers.auth import load_sessions
-from Clients_bot.utils.storage import load_part_requests, save_part_requests
+from Clients_bot.utils.helpers import add_message_to_request
+from Clients_bot.utils.storage import load_part_requests, save_part_requests, user_phone_numbers
 from Clients_bot.utils.auth import bind_phone_to_user, save_sessions, delete_phone_from_db
 from Clients_bot.filters import IsAuthenticated
 from Clients_bot.handlers.keyboards import admin_keyboard, admin_request_kb, admin_parts_request_kb, admin_change_request_kb
@@ -189,17 +190,39 @@ async def show_active_requests(message: types.Message):
         return await message.answer("✅ Нет активных запросов на детали.")
 
     text = "📦 <b>Активные запросы:</b>\n\n"
+
     for req in active_requests:
+        # Последние ответы (без индексов)
+        last_answer = req.get("answer", None)
+        last_admin_answer = req.get("admin_answer", None)
+
+        # Проверяем, есть ли история переписки (ключ "history" и он не пустой)
+        has_history = "history" in req and req["history"]
+
+        # Формируем текст с последними ответами
+        last_answer_text = f"🗣 <b>Последний ответ клиента:</b> {last_answer}\n\n" if last_answer else ""
+        last_admin_answer_text = f"🗣 <b>Последний ответ администратора:</b> {last_admin_answer}\n" if last_admin_answer else ""
+
         text += (
             f"🆔 <b>Запрос:</b> {req['request_id']}\n"
             f"👤 <b>Клиент:</b> {req['name']}\n"
             f"📞 <b>Телефон:</b> {req['phone_number']}\n"
             f"🚗 <b>Авто:</b> {req['car_info']}\n"
             f"🔍 <b>Деталь:</b> {req['part_name']}\n\n"
+            f"{last_admin_answer_text}"
+            f"{last_answer_text}"
             f"💬 <b>Ответить:</b> /answer_{req['request_id']}\n"
-            f"💬 <b>Отклонить:</b> /cancel_{req['request_id']}\n\n"
+            f"❌ <b>Закрыть:</b> /cancel_{req['request_id']}\n"
         )
 
+        # Добавляем кнопку "Показать всю переписку", если есть история
+        if has_history:
+            text += (
+                f"📜 <b>Показать всю переписку:</b> /details_{req['request_id']}\n"
+                f"-------------------------------------------------------\n"
+            )
+        else:
+            text += "\n"
 
     await message.answer(text, parse_mode="HTML")
 
@@ -240,12 +263,13 @@ async def process_answer(message: types.Message, state: FSMContext, bot):
     client_message = (
         f"📦 <b>Ответ на ваш запрос:</b>\n"
         f"🔹 {request['part_name']}\n"
-        f"📩 <b>Сообщение от администратора:</b> {admin_answer}"
+        f"📩 <b>Сообщение от администратора:</b> {admin_answer}\n\n"
+        f"💬 <b>Ответить администратору</b> /reply_{request_id} "
     )
-    # Обновляем статус запроса
-    request["status"] = "answered"
-    request["answer"] = admin_answer
-    save_part_requests(requests)
+
+
+    # ✅ Добавляем в историю (НЕ перезаписываем!)
+    add_message_to_request(request_id, "admin", admin_answer)
     await bot.send_message(request["user_id"], client_message, parse_mode="HTML")
 
     await message.answer("✅ Ответ отправлен клиенту.", reply_markup=admin_keyboard)
@@ -265,7 +289,7 @@ async def start_answering_request(message: types.Message, state: FSMContext):
 
     await state.update_data(request_id=request_id)
     await state.set_state(AnswerPartRequest.waiting_for_cancel)
-    await message.answer(f"✍️ Введите причину отказа для запроса: «{request['part_name']}» от {request['name']}:")
+    await message.answer(f"✍️ Введите статус с каким закрывается запрос: «{request['part_name']}» от {request['name']}:")
 
 @router.message(AnswerPartRequest.waiting_for_cancel)
 async def process_closing(message: types.Message, state: FSMContext, bot):
@@ -284,14 +308,14 @@ async def process_closing(message: types.Message, state: FSMContext, bot):
 
     # Отправляем клиенту сообщение с ответом
     client_message = (
-        f"📦 <b>Ваш запрос был отклонен:</b>\n"
+        f"📦 <b>Ваш запрос был обработан и закрыт:</b>\n"
         f"🔹 {request['part_name']}\n"
         f"📩 <b>Сообщение от администратора:</b> {admin_answer}"
     )
 
     # Обновляем статус запроса
     request["status"] = "closed"
-    request["answer"] = admin_answer
+    request["canceled_message"] = admin_answer
     save_part_requests(requests)
 
     await bot.send_message(request["user_id"], client_message, parse_mode="HTML")
@@ -312,17 +336,39 @@ async def show_request_history(message: types.Message):
         return await message.answer("📂 Нет обработанных запросов.")
 
     text = "📂 <b>История запросов:</b>\n\n"
+
     for req in answered_requests:
+        # Последние ответы (без индексов)
+        last_answer = req.get("answer", None)
+        last_admin_answer = req.get("admin_answer", None)
+
+        # Проверяем, есть ли история переписки (ключ "history" и он не пустой)
+        has_history = "history" in req and req["history"]
+
+        # Формируем текст с последними ответами
+        last_answer_text = f"🗣 <b>Последний ответ клиента:</b> {last_answer}\n\n" if last_answer else ""
+        last_admin_answer_text = f"🗣 <b>Последний ответ администратора:</b> {last_admin_answer}\n" if last_admin_answer else ""
+
         text += (
             f"🆔 <b>Запрос:</b> {req['request_id']}\n"
             f"👤 <b>Клиент:</b> {req['name']}\n"
             f"📞 <b>Телефон:</b> {req['phone_number']}\n"
             f"🚗 <b>Авто:</b> {req['car_info']}\n"
             f"🔍 <b>Деталь:</b> {req['part_name']}\n\n"
-            f"💬 <b>Статус:</b> {req['status']}\n"
-            f"💬 <b>Ответ:</b> {req['answer']}\n\n"
+            f"{last_admin_answer_text}"
+            f"{last_answer_text}\n"
+            f"✅ <b>Запрос завершен по причине:</b> {req['canceled_message']}\n"
 
         )
+
+        # Добавляем кнопку "Показать всю переписку", если есть история
+        if has_history:
+            text += (
+                f"📜 <b>Показать всю переписку:</b> /details_{req['request_id']}\n"
+                f"-------------------------------------------------------\n"
+            )
+        else:
+            text += "\n"
 
     await message.answer(text, parse_mode="HTML")
 

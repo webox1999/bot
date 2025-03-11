@@ -105,20 +105,27 @@ async def ask_for_vin(message: types.Message, state: FSMContext):
     await state.set_state(AddCarState.waiting_for_vin)
     await message.answer("🚗 Введите **VIN-код** вашего автомобиля:", reply_markup=cancel_keyboard_garage)
 
-@router.message(AddCarState.waiting_for_car)
-async def process_car_delete(message: types.Message, state: FSMContext):
+# Обработчик ввода VIN-кода (Шаг 3)
+@router.message(AddCarState.waiting_for_vin)
+async def process_vin_code(message: types.Message, state: FSMContext):
     """Получает VIN-код, проверяет его и отправляет запрос на API."""
-    car_id = message.text.strip().upper()
+    vin_code = message.text.strip().upper()
 
-    # Сохраняем car_id и переходим к отправке на API
-    await state.update_data(id=car_id)
-    await message.answer(f"✅ ID-авто **{car_id}** принято. Удаляем данные...", reply_markup=garage_keyboard)
+    # Проверяем длину VIN-кода (17 символов)
+    if len(vin_code) != 17:
+        return await message.answer("⚠️ VIN-код должен содержать 17 символов. Попробуйте еще раз.")
+
+    # Сохраняем VIN и переходим к отправке на API
+    await state.update_data(vin=vin_code)
+    await message.answer(f"✅ VIN-код **{vin_code}** принят. Отправляем данные...", reply_markup=garage_keyboard)
 
     # Завершаем состояние
     await state.clear()
 
     # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
-    await delete_car_from_garage(message, car_id)
+    await add_car_to_garage(message, vin_code)
+
+
 
 
 # Определим состояния
@@ -217,6 +224,21 @@ async def process_car_delete_confirmation(message: types.Message, state: FSMCont
     await delete_car_from_garage(message, car_id)
     await state.clear()
 
+@router.message(AddCarState.waiting_for_car)
+async def process_car_delete(message: types.Message, state: FSMContext):
+    """Получает VIN-код, проверяет его и отправляет запрос на API."""
+    car_id = message.text.strip().upper()
+
+    # Сохраняем car_id и переходим к отправке на API
+    await state.update_data(id=car_id)
+    await message.answer(f"✅ ID-авто **{car_id}** принято. Удаляем данные...", reply_markup=garage_keyboard)
+
+    # Завершаем состояние
+    await state.clear()
+
+    # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
+    await delete_car_from_garage(message, car_id)
+
 # Функция удаления автомобиля из гаража
 async def delete_car_from_garage(message: types.Message, car_id: str):
     """Отправляет car_id на API и удаляет авто из гаража."""
@@ -271,22 +293,3 @@ async def cancel_part_request(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("🔙 Вы возвращены в Гараж", reply_markup=garage_keyboard)
 
-# Обработчик ввода VIN-кода (Шаг 3)
-@router.message(AddCarState.waiting_for_vin)
-async def process_vin_code(message: types.Message, state: FSMContext):
-    """Получает VIN-код, проверяет его и отправляет запрос на API."""
-    vin_code = message.text.strip().upper()
-
-    # Проверяем длину VIN-кода (17 символов)
-    if len(vin_code) != 17:
-        return await message.answer("⚠️ VIN-код должен содержать 17 символов. Попробуйте еще раз.")
-
-    # Сохраняем VIN и переходим к отправке на API
-    await state.update_data(vin=vin_code)
-    await message.answer(f"✅ VIN-код **{vin_code}** принят. Отправляем данные...", reply_markup=garage_keyboard)
-
-    # Завершаем состояние
-    await state.clear()
-
-    # Переходим к следующему шагу: отправка VIN в API (Шаг 4)
-    await add_car_to_garage(message, vin_code)

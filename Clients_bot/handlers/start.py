@@ -2,14 +2,12 @@
 from aiogram import Router, types, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, Message
 from aiogram.filters import Command
-from aiohttp import web
-from aiogram.types import WebAppInfo
-from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.utils.auth import update_last_active
 from Clients_bot.config import SERVER_URL,API_URL  # Абсолютный импорт
 from Clients_bot.utils.helpers import clean_phone_number  # Абсолютный импорт
 from Clients_bot.handlers.keyboards import main_kb, unAuth_keyboard
 from Clients_bot.utils.helpers import get_field_value
+from Clients_bot.utils.storage import user_phone_numbers
 import logging
 import requests
 
@@ -116,16 +114,16 @@ def get_cars_for_delete(phone_number):
                 model = car.get("auto_model", "Неизвестная модель")
                 vin = car.get("vin", "Нет VIN")
                 car_id = car.get("id", "Нет id")
+                year = car.get("made_year", "Год не указан")
 
                 # Добавляем данные автомобиля в словарь
                 cars[car_id] = {
                     "brand": brand,
                     "model": model,
                     "vin": vin,
-                    "id": car_id
+                    "id": car_id,
+                    "year": year
                 }
-
-        print(cars)
 
         return cars
 
