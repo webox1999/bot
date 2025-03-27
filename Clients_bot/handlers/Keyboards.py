@@ -1,20 +1,20 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from Clients_bot.utils.admin_utils import load_admins
+from Clients_bot.utils.admin_utils import is_admin
 # Клавиатура с основными кнопками
 
 def main_kb(user_id):
-    admins = load_admins()
-
+    admins = is_admin(user_id)
     # Базовая клавиатура
     keyboard = [
         [KeyboardButton(text="🚗 Гараж"), KeyboardButton(text="📦 Заказы")],
-        [KeyboardButton(text="💳 История платежей"),KeyboardButton(text="📜 Мои запросы") ],
-        [KeyboardButton(text="🔍 Запрос детали"), KeyboardButton(text="ℹ Информация и бонусы")],
-        [KeyboardButton(text="🚨 Сообщить о проблеме"), KeyboardButton(text="🚪 Выйти")]
+        [KeyboardButton(text="🔎 Подобрать запчасть"),KeyboardButton(text="🛠️ Детали для Т/О") ],
+        [KeyboardButton(text="💳 История платежей"), KeyboardButton(text=f"📜 Мои запросы")],
+        [KeyboardButton(text="🚨 Сообщить о проблеме"), KeyboardButton(text="ℹ Информация и бонусы")],
+        [KeyboardButton(text="🎟 Купоны"), KeyboardButton(text="🚪 Выйти")]
     ]
 
     # Если пользователь администратор, добавляем кнопку "Админ панель"
-    if user_id in admins:
+    if admins:
         keyboard.append([KeyboardButton(text="Админ панель")])
 
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
@@ -35,6 +35,7 @@ admin_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="👥 Онлайн пользователи"), KeyboardButton(text="👑 Список админов")],
         [KeyboardButton(text="🔎 Проверить клиента"), KeyboardButton(text="💲 Доход от клиента")],
         [KeyboardButton(text="👤 Новые клиенты"), KeyboardButton(text="📜 Запросы")],
+        [KeyboardButton(text="💬 Отправить сообщение"), KeyboardButton(text="Активировать купон")],
         [KeyboardButton(text="🔙 Назад")]
     ],
     resize_keyboard=True
@@ -50,7 +51,7 @@ admin_request_kb = ReplyKeyboardMarkup(
 
 my_request_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Запросы запчастей"), KeyboardButton(text="Запросы смены номера")],
+        [KeyboardButton(text="🛒 Запросы запчастей"), KeyboardButton(text="📞 Запросы смены номера")],
         [KeyboardButton(text="🔙 Назад")]
     ],
     resize_keyboard=True
@@ -66,11 +67,12 @@ admin_parts_request_kb = ReplyKeyboardMarkup(
 
 my_parts_request_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📜 Активные запросы"), KeyboardButton(text="📜 История запросов")],
+        [KeyboardButton(text="📌 Активные запросы"), KeyboardButton(text="📖 История запросов")],
         [KeyboardButton(text="📜 Мои запросы")]
     ],
     resize_keyboard=True
 )
+
 
 admin_change_request_kb = ReplyKeyboardMarkup(
     keyboard=[
@@ -155,5 +157,38 @@ approved_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="Отменить")]
     ],
 
+    resize_keyboard=True
+)
+
+log_in = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Войти в личный кабинет")]
+    ],
+
+    resize_keyboard=True
+)
+
+add_info_car = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Добавить информацию")],
+        [KeyboardButton(text="🔙 Назад")]
+    ],
+
+    resize_keyboard=True
+)
+
+choose_metod_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="💬 Сообщение всем"), KeyboardButton(text="🏷 Сообщение всем с купоном")],
+        [KeyboardButton(text="Админ панель")]
+    ],
+    resize_keyboard=True
+)
+
+kupon_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="✅ Действующие"), KeyboardButton(text="🗄 Архив купонов")],
+        [KeyboardButton(text="🔙 Назад")]
+    ],
     resize_keyboard=True
 )

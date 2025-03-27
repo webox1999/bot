@@ -3,10 +3,16 @@ import os
 from pathlib import Path
 import uuid
 
+# REQUESTS_FILE = Path("Clients_bot/data/change_phone_request.json")
+# ADMINS_FILE = 'Clients_bot/data/admins.json'
+# clients_file = "Clients_bot/data/sessions.json"
+# new_users = Path('Clients_bot/data/new_users.json')
+
 REQUESTS_FILE = Path("data/change_phone_request.json")
 ADMINS_FILE = 'data/admins.json'
 clients_file = "data/sessions.json"
 new_users = Path('data/new_users.json')
+
 # Проверяем, существует ли файл, если нет — создаем
 if not os.path.exists(ADMINS_FILE):
     with open(ADMINS_FILE, 'w') as f:
@@ -25,15 +31,33 @@ init_requests_file()
 
 
 def load_admins():
-    with open(ADMINS_FILE, 'r') as f:
-        return json.load(f)['admins']
+    """ Загружает список админов из файла """
+    with open(ADMINS_FILE, 'r', encoding="utf-8") as f:
+        data = json.load(f)
+        admins = data.get("admins", [])
+
+        # Проверяем старую структуру (список ID) и обновляем её
+        if admins and isinstance(admins[0], int):
+            admins = [{"id": admin, "name": "Неизвестный"} for admin in admins]
+            save_admins(admins)  # Сразу обновляем JSON
+
+        return admins  # Теперь всегда возвращает список словарей
 
 def save_admins(admins):
-    with open(ADMINS_FILE, 'w') as f:
-        json.dump({"admins": admins}, f, indent=4)
+    """ Сохраняет список админов в файл """
+    with open(ADMINS_FILE, 'w', encoding="utf-8") as f:
+        json.dump({"admins": admins}, f, indent=4, ensure_ascii=False)
 
 def is_admin(user_id):
-    return user_id in load_admins()
+    """ Проверяет, является ли пользователь администратором """
+    admins = load_admins()
+    return any(admin["id"] == user_id for admin in admins)  # Работает с новой структурой
+
+def get_admin_name(user_id):
+    """ Получает имя админа по его ID """
+    admins = load_admins()
+    admin = next((admin for admin in admins if admin["id"] == user_id), None)
+    return admin["name"] if admin else None
 
 
 

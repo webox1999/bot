@@ -55,7 +55,7 @@ async def process_phone(message: types.Message, phone_number: str):
         logger.info(f"🔹 Ответ сервера: {data}")
 
         text = f"✅ *Данные клиента:*\n"
-        text += f"👤 *Имя:* {data.get('name', 'Нет данных')}\n"
+        text += f"👤 *Имя:* {data.get('name', 'Нет данных').split('%')[0]}\n"
         text += f"💰 *Баланс:* {data.get('balance', 'Нет данных')} ₽\n"
         text += f"💸 *Бонусы:* {data.get('cashback', 'Нет данных')} ₽\n"
         text += f"📅 *Дата регистрации:* {data.get('reg_date', 'Нет данных')}\n"
@@ -115,14 +115,15 @@ def get_cars_for_delete(phone_number):
                 vin = car.get("vin", "Нет VIN")
                 car_id = car.get("id", "Нет id")
                 year = car.get("made_year", "Год не указан")
-
+                type = car.get("auto_doc_num", "Нет модификации")
                 # Добавляем данные автомобиля в словарь
                 cars[car_id] = {
                     "brand": brand,
                     "model": model,
                     "vin": vin,
                     "id": car_id,
-                    "year": year
+                    "year": year,
+                    "type": type
                 }
 
         return cars
@@ -136,7 +137,7 @@ def get_info(phone_number):
         response = requests.get(SERVER_URL + phone_number)
         response.raise_for_status()  # Проверка на ошибки HTTP
         data = response.json()
-        name = data.get('name', 'Нет данных')
+        name = data.get('name', 'Нет данных').split('%')[0]
         client_id = data.get('client_id', 'Нет данных')
         return name, client_id
 

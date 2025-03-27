@@ -1,19 +1,22 @@
+import os
 import sys
 from pathlib import Path
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
-from Clients_bot.utils.auth import load_sessions
+from utils.auth import load_sessions
 from aiogram.fsm.storage.memory import MemoryStorage
-from Clients_bot.utils.storage import user_phone_numbers
-from Clients_bot.utils.order_utils import initialize_orders, check_orders_status
-from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration, ask_parts, admin1, add_car_by_brand
+from utils.storage import user_phone_numbers
+from handlers.bonuses import auto_check_codes
+from utils.order_utils import initialize_orders, check_orders_status
+from handlers import start, orders, garage, bonuses, buttons, admin, auth, payments, registration, ask_parts, admin1, add_car_by_brand, looking_parts
 initialized_numbers = set()
 
-# Добавляем корневую папку проекта в sys.path
-sys.path.append(str(Path(__file__).parent))
 
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 # Настройка логирования
@@ -35,6 +38,7 @@ dp.include_router(admin.router)
 dp.include_router(admin1.router)
 dp.include_router(registration.router)
 dp.include_router(ask_parts.router)
+dp.include_router(looking_parts.router)
 dp.include_router(auth.router)
 
 
@@ -82,9 +86,12 @@ async def check_orders_background():
 
         await asyncio.sleep(3600)  # Проверяем каждые 20 секунд
 
+
+
 async def main():
 
     asyncio.create_task(check_orders_background())
+   #  asyncio.create_task(auto_check_codes())
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":

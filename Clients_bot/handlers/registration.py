@@ -5,8 +5,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import json
 import os
 import aiohttp
-from Clients_bot.handlers.keyboards import unAuth_keyboard, phone_keyboard, Auth_keyboard
-from Clients_bot.utils.helpers import clean_phone_number
+from Clients_bot.handlers.garage import add_car_to_garage
+from Clients_bot.handlers.auth import check_phone
+from Clients_bot.handlers.keyboards import unAuth_keyboard, main_kb
+from Clients_bot.utils.storage import user_phone_numbers
 from Clients_bot.handlers.start import get_cars  # Получение авто
 from Clients_bot.config import API_URL
 from Clients_bot.utils.auth import DATA_PATH
@@ -37,30 +39,31 @@ async def start_registration(message: types.Message, state: FSMContext):
 async def process_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
     await state.set_state(RegistrationState.waiting_for_phone)
+    await register_client(message, state)
 
-
-    await message.answer(
-        "📞 Введите **ваш номер телефона** или отправьте контакт кнопкой ниже:",
-        reply_markup=phone_keyboard
-    )
-
-
-@router.message(RegistrationState.waiting_for_phone, F.contact)
-async def process_phone_contact(message: types.Message, state: FSMContext):
-    phone_number = clean_phone_number(message.contact.phone_number)
-    await state.update_data(phone=phone_number)
-    await request_vin(message, state)
-
-
-@router.message(RegistrationState.waiting_for_phone, F.text)
-async def process_phone_text(message: types.Message, state: FSMContext):
-    phone_number = clean_phone_number(message.text.strip())
-    await state.update_data(phone=phone_number)
-    await request_vin(message, state)
+#     await message.answer(
+#         "📞 Введите **ваш номер телефона** или отправьте контакт кнопкой ниже:",
+#         reply_markup=phone_keyboard
+#     )
+#
+#
+# @router.message(RegistrationState.waiting_for_phone, F.contact)
+# async def process_phone_contact(message: types.Message, state: FSMContext):
+#     phone_number = clean_phone_number(message.contact.phone_number)
+#     await state.update_data(phone=phone_number)
+#     await request_vin(message, state)
+#
+#
+# @router.message(RegistrationState.waiting_for_phone, F.text)
+# async def process_phone_text(message: types.Message, state: FSMContext):
+#     phone_number = clean_phone_number(message.text.strip())
+#     await state.update_data(phone=phone_number)
+#     await request_vin(message, state)
 
 
 async def request_vin(message: types.Message, state: FSMContext):
     await state.set_state(RegistrationState.waiting_for_vin)
+
     await message.answer(
         "🚗 Введите **VIN-код** вашего автомобиля,он добавиться в ваш Гараж клиента (необязательно, можете пропустить):",
         reply_markup=ReplyKeyboardMarkup(
@@ -73,22 +76,29 @@ async def request_vin(message: types.Message, state: FSMContext):
 @router.message(F.text == "⏭ Пропустить VIN", RegistrationState.waiting_for_vin)
 async def skip_vin(message: types.Message, state: FSMContext):
     await state.update_data(vin=None)
-    await register_client(message, state)
-
+    user_id = message.from_user.id
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    cars = await get_cars(phone_number)
+    if cars:
+        await check_phone(message, phone_number)
+        await message.answer(f"{cars}", reply_markup=main_kb(user_id))
+    await state.clear()
 
 @router.message(RegistrationState.waiting_for_vin, F.text)
 async def process_vin(message: types.Message, state: FSMContext):
     await state.update_data(vin=message.text.strip())
-    await register_client(message, state)
-
+    user_data = await state.get_data()
+    vin = user_data["vin"]
+    await add_car_to_garage(message, vin, 'registration')
+    await state.clear()
 
 async def register_client(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     name = user_data["name"]
-    phone_number = user_data["phone"]
-    vin = user_data["vin"] or ""
+    phone_number = user_phone_numbers.get(message.from_user.id)
 
-    register_url = f"{API_URL}/register_client?name={name}&phone={phone_number}&type=3&bonuses=1232&vin={vin}"
+
+    register_url = f"{API_URL}/register_client?name={name}&phone={phone_number}&type=3&bonuses=1232&vin="
 
     print(f"📡 Отправляем запрос на регистрацию:\n{register_url}")
 
@@ -108,17 +118,16 @@ async def register_client(message: types.Message, state: FSMContext):
         client_id = data.get("company_id", "Неизвестно")
         tg_id = message.from_user.id
         tg_name = message.from_user.full_name or "Не указан"
-        await message.answer(f"✅ Вы успешно зарегистрированы!\n👤 {name}\n📱 {phone_number}")
-
-        cars = await get_cars(phone_number)
-        if cars:
-            await message.answer(f"{cars}", reply_markup=Auth_keyboard)
+        # await message.answer(f"✅ Вы успешно зарегистрированы!\n👤 {name}\n📱 {phone_number}")
         await save_new_user(tg_id, tg_name, name, phone_number, client_id)
-        await state.clear()
+        await request_vin(message, state)
+
 
     else:
         print("❌ Ошибка регистрации, сервер не вернул 'status': 'ok'")
         await message.answer("❌ Ошибка регистрации. Попробуйте позже.")
+
+
 
 
 async def save_new_user(tg_id, tg_name, name, phone, client_id):

@@ -5,6 +5,7 @@ from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from Clients_bot.utils.messaging import send_to_admins
 from Clients_bot.utils.helpers import clean_phone_number
 from Clients_bot.utils.storage import user_phone_numbers, verification_codes
 from Clients_bot.handlers.start import process_phone
@@ -50,8 +51,9 @@ async def check_phone(message: Message, phone_number: str):
 
     # ✅ Клиент найден – продолжаем авторизацию
     client_id = data.get("client_id", "Неизвестно")
-    name = data.get("name", "Неизвестно")
 
+    name = data.get("name", "Неизвестно").split("%")[0]
+    description = " ".join(data.get("name", "Неизвестно").split("%")[1:]).strip()
     # Загружаем текущие сессии
     sessions = load_sessions()
 
@@ -61,7 +63,8 @@ async def check_phone(message: Message, phone_number: str):
         "username": username,    # Telegram username
         "full_name_tg": full_name_tg,  # Полное имя в Telegram
         "client_id": client_id,  # ID клиента из API
-        "name": name  # Имя клиента из базы API
+        "name": name, # Имя клиента из базы API
+        "description": description
     }
     save_sessions(sessions)
 
@@ -171,10 +174,7 @@ class LogoutState(StatesGroup):
             request_id = create_change_request(client_id, current_phone, phone_number, name)
 
             # Уведомляем админов
-            admins = load_admins()
-            for admin_id in admins:
-                await bot.send_message(
-                    admin_id,
+            text = (
                     f"Запрос о смене номера:\n"
                     f"Пользователь: {name}, ID: {client_id}\n"
                     f"Номер: {current_phone}\n"
@@ -183,6 +183,7 @@ class LogoutState(StatesGroup):
                     f"Отклонить: /decline_change_{request_id}"
                 )
 
+            await send_to_admins(bot, text)
             await message.answer("✅ Запрос на смену номера отправлен. Дождитесь рассмотрения администратором.", reply_markup=unAuth_keyboard)
             await state.clear()
 
@@ -281,6 +282,19 @@ async def confirm_logout(message: Message, state: FSMContext):
 
     # Сбрасываем состояние
     await state.clear()
+
+
+@router.message(F.text == "Войти в личный кабинет")
+async def log_in(message: types.Message):
+    phone_number = user_phone_numbers.get(message.from_user.id)
+
+    if not phone_number:
+        await message.answer(
+            "❌ Что то пошло не так и вас не удалось зарегистрировать.Попробуйте еще раз!",
+            reply_markup=unAuth_keyboard
+        )
+        return
+    await check_phone(message, phone_number)
 
 # Обработчик для не авторизированых клиентов
 

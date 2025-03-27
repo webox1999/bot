@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 import requests
 from datetime import datetime, timedelta
 from flask_cors import CORS
+from bs4 import BeautifulSoup
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -84,13 +86,13 @@ def get_client_cars(client_id):
 
     return []
 
-def get_client_cashback(client_id):
+def get_client_data(client_id):
     """Запрашивает полную информацию о клиенте. Берет только кэшбек (Можно вытащить всю инфу)"""
     payload = {"action": "get_company", "company_id": int(client_id)}
     response = SESSION.post(URL, json=payload)
 
     if response.status_code == 200:
-        return response.json().get("company_cashback", [])
+        return response.json()
 
     return []
 
@@ -121,7 +123,7 @@ def get_client_info():
 
     orders = get_client_orders(client_id)
     cars = get_client_cars(client_id)
-    cashback = get_client_cashback(client_id)
+    cashback = get_client_data(client_id).get("company_cashback", [])
 
     return jsonify({
         "client_id": client_id,
@@ -184,16 +186,24 @@ def add_car():
     vin = request.args.get("vin")  # Может быть None, если не передан
     client_id = request.args.get("id")
 
-    # Формируем payload
+    # Проверяем, передан ли VIN-код
+    if not vin:
+        return {"error": "VIN is required"}, 400
+
+    # Получаем информацию об автомобиле
     car_info = get_car_info(vin)
-    car_engine = car_info["engine_num"]
-    made_date = car_info["made_date"]
+
+    # Проверяем, найдены ли данные об авто
+    if not car_info or car_info.get("engine_num") == "" or car_info.get("made_date") == "":
+        return {"error": "Vehicle information not found", "vin": vin}, 404
+
+    # Формируем payload для основного API
     payload = {
         "action": "save_company_car",
         "company_id": client_id,
         "vin": vin,
-        "engine_num": car_engine,
-        "made_date": made_date
+        "engine_num": car_info["engine_num"],
+        "made_date": car_info["made_date"]
     }
 
     # Отправляем POST-запрос
@@ -202,9 +212,9 @@ def add_car():
     # Возвращаем ответ
     if response.status_code == 200:
         return response.json(), car_info
-
     else:
         return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
+
 
 @app.route("/add_by_brand", methods=["GET"])
 def add_by_brand():
@@ -215,15 +225,19 @@ def add_by_brand():
     model = request.args.get("model")
     car_engine = request.args.get("engine")
     year = request.args.get("year")
+    modification = request.args.get("type")
+    car_id = request.args.get("car_id")
     # Формируем payload
     payload = {
         "action": "save_company_car",
         "company_id": client_id,
+        "company_car_id": car_id,
         "vin": vin,
         "engine_num": car_engine,
         "made_year": year,
         "auto_maker_id": brand,
-        "auto_model": model
+        "auto_model": model,
+        "auto_doc_num": modification
     }
 
     # Отправляем POST-запрос
@@ -235,6 +249,8 @@ def add_by_brand():
 
     else:
         return {"error": "Failed to process request", "status_code": response.status_code}, response.status_code
+
+
 
 @app.route("/car_delete", methods=["GET"])
 def car_delete():
@@ -312,6 +328,232 @@ def get_profit():
             "sale_sum": sale_sum
         })
 
+@app.route("/add_code", methods=["GET"])
+def add_codes():
+    client_id = request.args.get("client_id")
+    codes = request.args.get("code")
+    client_data = get_client_data(client_id)
+    check = client_data.get("descr")
+    if check == "":
+        code = f'Действующие купоны: {codes}'
+    else:
+        code = f'{check}, {codes}'
+    payload = {
+        "action": "save_company",
+        "company_id": client_id,
+        "descr": code,
+        "show_descr": "on",
+    }
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
+
+@app.route("/delete_code", methods=["GET"])
+def delete_codes():
+    client_id = request.args.get("client_id")
+    codes = request.args.get("code")
+    client_data = get_client_data(client_id)
+    check = client_data.get("descr")
+    payload = {}
+    if codes in check:
+        payload = {
+            "action": "save_company",
+            "company_id": client_id,
+            "descr": check.replace(f", {codes}", ""),
+            "show_descr": "on"
+        }
+    else:
+        return {'error': 'код не найден'}
+    response = SESSION.post(URL, json=payload)
+
+    if response.status_code == 200:
+        return response.json()
+
+
+def match_any(text, keywords):
+    return any(word in text.lower() for word in keywords)
+
+
+def parse_vehicle_html(soup):
+    vehicles = []
+
+    table = soup.select_one("table.vehicle-modifications")
+    if not table:
+        print("⚠️ Таблица не найдена.")
+        return []
+
+    # Извлекаем заголовки таблицы
+    headers = table.select("thead th")
+    column_map = {}
+
+    for i, header in enumerate(headers):
+        text = header.text.strip()
+
+        if match_any(text, ['двигатель', 'engine', 'номер двигателя']):
+            column_map['engine'] = i
+        elif match_any(text, ['дата выпуска', 'release date']):
+            column_map['release_date'] = i
+        elif match_any(text, ['код модели', 'model code']):
+            column_map['model_code'] = i
+        elif match_any(text, ['модель']) and 'код' not in text.lower():
+            column_map['model_name'] = i
+        elif match_any(text, ['регион']):
+            column_map['region'] = i
+        elif match_any(text, ['кпп', 'трансмиссия', 'gearbox']):
+            column_map['gearbox'] = i
+        elif match_any(text, ['привод', 'drive']):
+            column_map['drive'] = i
+        elif match_any(text, ['кузов', 'body']):
+            column_map['body'] = i
+        elif match_any(text, ['салон', 'цвет', 'interior']):
+            column_map['interior'] = i
+        elif match_any(text, ['дверей']):
+            column_map['doors'] = i
+        elif match_any(text, ['руль', 'рулевое управление']):
+            column_map['steering'] = i
+
+    # Заголовок с брендом и моделью из <h3>
+    h3 = soup.select_one("div.grouped-vehicles h3")
+    brand, model_from_h3 = None, None
+    if h3:
+        parts = h3.text.strip().split(" ", 1)
+        if len(parts) == 2:
+            brand, model_from_h3 = parts
+
+    # Парсим строки таблицы
+    rows = table.select("tbody tr")
+    for row in rows:
+        cells = row.find_all("td")
+        if not cells or len(cells) < 5:
+            continue
+
+        try:
+            vehicle = {
+                "brand": brand,
+                "model_from_h3": model_from_h3
+            }
+
+            # Извлекаем по column_map
+            for key, idx in column_map.items():
+                if idx < len(cells):
+                    vehicle[key] = cells[idx].text.strip()
+                else:
+                    vehicle[key] = ""
+
+            # Нормализуем дату
+            if "release_date" in vehicle:
+                try:
+                    release = vehicle["release_date"]
+                    vehicle["release_date"] = datetime.strptime(release, "%d.%m.%Y").strftime("%Y-%m-%d")
+                except:
+                    vehicle["release_date"] = ""
+
+            # Разбор мощности и двигателя
+            if "engine" in vehicle:
+                engine = vehicle["engine"]
+                vehicle["engine_code"] = engine.split()[0] if engine else ""
+                if "/" in engine:
+                    vehicle["power_kw"] = engine.split("/")[-1].replace("kW", "").strip(")")
+                else:
+                    vehicle["power_kw"] = ""
+
+            vehicles.append(vehicle)
+
+        except Exception as e:
+            print(f"⚠️ Ошибка при разборе строки: {e}")
+            continue
+
+    return vehicles
+
+
+@app.route("/laximo", methods=["GET"])
+def parse_vehicle_info_from_vin():
+    vin = request.args.get("vin")
+    url = f"https://sort1.pro/laximo/index.php?task=vehicles&ft=FindVehicle&c=&identString={vin}&ssd="
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "ru,en;q=0.9",
+        "Connection": "keep-alive",
+        "Referer": "https://sort1.pro/laximo/",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        return {"error": f"Ошибка запроса: {str(e)}"}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    result = parse_vehicle_html(soup)
+    return result
+
+@app.route("/tecdoc_brands", methods=["GET"])
+def get_tecdoc_linkage_targets():
+    url = "https://tecdoc-catalog.p.rapidapi.com/manufacturers/list/lang-id/4/country-filter-id/62/type-id/1"
+
+    headers = {
+        "x-rapidapi-key": "4707c00030msh0e31199d8eff5c1p14242bjsn1effc6003ae4",
+        "x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers)
+
+    return response.json()
+
+@app.route("/tecdoc_models", methods=["GET"])
+def get_tecdoc_models():
+    brand = request.args.get("brand_id")
+    url = f"https://tecdoc-catalog.p.rapidapi.com/models/list/manufacturer-id/{brand}/lang-id/4/country-filter-id/62/type-id/1"
+
+    headers = {
+        "x-rapidapi-key": "4707c00030msh0e31199d8eff5c1p14242bjsn1effc6003ae4",
+        "x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers)
+
+
+    return response.json()
+
+@app.route("/tecdoc_mod", methods=["GET"])
+def get_tecdoc_modif():
+    brand = request.args.get("brand_id")
+    model = request.args.get("m_id")
+    url = f"https://tecdoc-catalog.p.rapidapi.com/types/list-vehicles-types/{model}/manufacturer-id/{brand}/lang-id/4/country-filter-id/62/type-id/1"
+
+    headers = {
+        "x-rapidapi-key": "4707c00030msh0e31199d8eff5c1p14242bjsn1effc6003ae4",
+        "x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers)
+
+
+    return response.json()
+
+@app.route("/tecdoc_car", methods=["GET"])
+def get_tecdoc_carInfo():
+    brand = request.args.get("brand_id")
+    model = request.args.get("car_id")
+
+    url = f"https://tecdoc-catalog.p.rapidapi.com/types/vehicle-type-details/{model}/manufacturer-id/{brand}/lang-id/16/country-filter-id/62/type-id/1"
+
+    headers = {
+        "x-rapidapi-key": "4707c00030msh0e31199d8eff5c1p14242bjsn1effc6003ae4",
+        "x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers)
+
+
+    return response.json()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8050, debug=True)

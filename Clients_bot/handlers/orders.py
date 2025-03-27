@@ -8,7 +8,6 @@ from Clients_bot.utils.helpers import split_text
 from Clients_bot.config import SERVER_URL
 from Clients_bot.filters import IsAuthenticated
 from Clients_bot.handlers.keyboards import unAuth_keyboard
-
 import requests
 
 
@@ -276,7 +275,7 @@ async def show_orders(message: types.Message):
                 completed_count += 1
                 total_completed_price += data["order_price"]
 
-        # Отображаем меню с кнопками заказов
+        # Отображаем меню с кнопками заказов и сохраняем счетчик активных заказов
         await show_order_menu(message, active_count, completed_count)
 
     except requests.exceptions.RequestException as e:

@@ -3,10 +3,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import uuid
+from typing import Optional
 from Clients_bot.utils.admin_utils import  get_change_requests
 from Clients_bot.utils.storage import load_part_requests, save_part_requests
 from Clients_bot.filters import IsAuthenticated
-from Clients_bot.utils.storage import user_phone_numbers
+from Clients_bot.utils.storage import user_phone_numbers,user_cars_names
 from Clients_bot.handlers.keyboards import main_kb, cancel_keyboard_parts, unAuth_keyboard, my_request_kb, my_change_request_kb, my_parts_request_kb
 from Clients_bot.handlers.start import get_cars_for_delete, get_info
 from Clients_bot.utils.messaging import send_to_admins
@@ -21,7 +22,7 @@ class AskPartState(StatesGroup):
 
 
 # Обработчик кнопки "Запрос детали"
-@router.message(F.text == "🔍 Запрос детали", IsAuthenticated())
+@router.message(F.text == "🔎 Подобрать запчасть", IsAuthenticated())
 async def ask_for_car_choice(message: types.Message, state: FSMContext):
     """Проверяем авторизацию у клиента перед запросом детали."""
     phone_number = user_phone_numbers.get(message.from_user.id)
@@ -100,10 +101,14 @@ async def ask_for_part_name(message: types.Message, state: FSMContext):
     await message.answer("🔍 Введите название детали, которую хотите найти:", reply_markup=cancel_keyboard_parts)
 
 @router.message(AskPartState.waiting_for_part_name)
-async def process_part_request(message: types.Message, state: FSMContext, bot):
+async def process_part_request(message: types.Message, state: FSMContext, bot, article: Optional[str] = None):
     """Сохраняет запрос клиента и отправляет уведомление админам."""
 
-    part_name = message.text.strip()
+    # Проверяем, есть ли текст в сообщении
+    if message.text:
+        part_name = message.text.strip()
+    else:
+        part_name = "Неизвестная деталь"  # Подставляем заглушку, если текста нет
     user_id = str(message.from_user.id)
     full_name_tg = message.from_user.full_name
     phone = user_phone_numbers.get(message.from_user.id)
@@ -114,6 +119,31 @@ async def process_part_request(message: types.Message, state: FSMContext, bot):
 
     requests = load_part_requests()
     request_id = str(uuid.uuid4())[:8]  # Генерируем ID запроса
+    admin_message = (
+        f"📦 <b>Новый запрос на деталь</b>\n"
+        f"🆔 <b>Запрос:</b> {request_id}\n"
+        f"👤 <b>Клиент:</b> {name} , ID: {client_id}\n"
+        f"📞 <b>Телефон:</b> {phone}\n"
+        f"🚗 <b>Авто:</b> {car_info}\n"
+        f"🔍 <b>Деталь:</b> {part_name}\n\n"
+        f"💬 <b>Ответить:</b> /answer_{request_id}\n"
+        f"❌ <b>Отклонить и закрыть:</b> /cancel_{request_id}\n"
+    )
+    if car_info == "🚗 Авто не указано":
+        car_info = user_cars_names[message.from_user.id]
+    if article:
+        part_name = f'Какая стоимость этой детали {article}'
+        admin_message = (
+            f"📦 <b>Новый запрос на деталь</b>\n"
+            f"🆔 <b>Запрос:</b> {request_id}\n"
+            f"👤 <b>Клиент:</b> {name} , ID: {client_id}\n"
+            f"📞 <b>Телефон:</b> {phone}\n"
+            f"🚗 <b>Авто:</b> {car_info}\n"
+            f"🔍 <b>Деталь:</b> {part_name}\n"
+            f"🔍 <b>Открыть запчасть:</b> /show_{article}\n\n"
+            f"💬 <b>Ответить:</b> /answer_{request_id}\n"
+            f"❌ <b>Отклонить и закрыть:</b> /cancel_{request_id}\n"
+        )
     new_request = {
         "request_id": request_id,
         "user_id": user_id,
@@ -132,17 +162,6 @@ async def process_part_request(message: types.Message, state: FSMContext, bot):
 
     requests.append(new_request)
     save_part_requests(requests)
-
-    admin_message = (
-        f"📦 <b>Новый запрос на деталь</b>\n"
-        f"🆔 <b>Запрос:</b> {request_id}\n"
-        f"👤 <b>Клиент:</b> {name} , ID: {client_id}\n"
-        f"📞 <b>Телефон:</b> {phone}\n"
-        f"🚗 <b>Авто:</b> {car_info}\n"
-        f"🔍 <b>Деталь:</b> {part_name}\n\n"
-        f"💬 <b>Ответить:</b> /answer_{request_id}\n"
-        f"❌ <b>Отклонить и закрыть:</b> /cancel_{request_id}\n"
-    )
 
     await send_to_admins(bot, admin_message)
     await message.answer("✅ Ваш запрос отправлен администратору. Ожидайте ответа.", reply_markup=main_kb(message.from_user.id))
@@ -203,12 +222,12 @@ async def my_request(message: types.Message):
     await message.answer("*Меню запросов*.",
                          reply_markup=my_request_kb)
 
-@router.message(F.text == "Запросы запчастей")
+@router.message(F.text == "🛒 Запросы запчастей")
 async def my_request(message: types.Message):
     await message.answer("*Меню запросов запчастей*.",
                          reply_markup=my_parts_request_kb)
 
-@router.message(F.text == "Запросы смены номера")
+@router.message(F.text == "📞 Запросы смены номера")
 async def my_request(message: types.Message):
     await message.answer("*Меню запросов о смене номера*.",
                          reply_markup=my_change_request_kb)
@@ -259,7 +278,7 @@ async def show_my_change_history_requests(message: types.Message):
             f"Статус: {req['status']}"
         )
 
-@router.message(F.text == "📜 Активные запросы")
+@router.message(F.text == "📌 Активные запросы")
 async def show_my_parts_requests(message: types.Message):
 
     phone_number = user_phone_numbers.get(message.from_user.id)
@@ -272,7 +291,7 @@ async def show_my_parts_requests(message: types.Message):
     ]
 
     if not history_requests:
-        await message.answer("Активные запросы поиска запчастей отсутствуют.")
+        await message.answer("Активные запросы для подбора запчастей отсутствуют.")
         return
 
     text = "📦 <b>Активные запросы:</b>\n\n"
@@ -311,7 +330,7 @@ async def show_my_parts_requests(message: types.Message):
 
     await message.answer(text, parse_mode="HTML")
 
-@router.message(F.text == "📜 История запросов")
+@router.message(F.text == "📖 История запросов")
 async def show_my_parts_history_requests(message: types.Message):
 
     phone_number = user_phone_numbers.get(message.from_user.id)

@@ -5,6 +5,12 @@ from pathlib import Path
 import random
 from Clients_bot.utils.storage import user_phone_numbers
 
+# # Файл для хранения сессий пользователей
+# SESSIONS_FILE = "Clients_bot/data/sessions.json"
+# SESSIONS_CHECKIN = Path("Clients_bot/data/sessions.json")
+# DATA_PATH = "Clients_bot/data/new_users.json"
+# USERS_FILE = Path("Clients_bot/data/proccessing_users.json")
+
 # Файл для хранения сессий пользователей
 SESSIONS_FILE = "data/sessions.json"
 SESSIONS_CHECKIN = Path("data/sessions.json")

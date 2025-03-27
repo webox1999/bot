@@ -5,7 +5,27 @@
             "username": "Weboxs",
             "full_name_tg": "Alexander",
             "client_id": "175990",
-            "name": "Бойко Александр Юрьевич"
+            "name": "Бойко Александр Юрьевич",
+            "description": "",
+            "last_active": "2025-03-24 14:36:57"
+        },
+        "7883077464": {
+            "phone": "79595186040",
+            "username": "Не указан",
+            "full_name_tg": "Александр",
+            "client_id": "177517",
+            "name": "Аккаунт для теста",
+            "description": "текст для админа",
+            "last_active": "2025-03-27 10:35:00"
+        },
+        "7165639255": {
+            "phone": "79595354000",
+            "username": "zarulemstb",
+            "full_name_tg": "Автозапчасти «За Рулем»",
+            "client_id": "176397",
+            "name": "Магазин ЗаРулем",
+            "description": "",
+            "last_active": "2025-03-27 10:38:49"
         }
     }
 }

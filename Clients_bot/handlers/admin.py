@@ -29,17 +29,22 @@ async def add_admin(message: Message):
 
     try:
         new_admin_id = int(message.text.split()[1])
+        new_admin_name = " ".join(message.text.split()[2:])  # Поддержка имен из нескольких слов
+
     except (IndexError, ValueError):
-        return await message.answer("❌ Использование: /add_admin [TG ID]")
+        return await message.answer("❌ Использование: /add_admin [TG ID] [Имя админа]")
 
     admins = load_admins()
-    if new_admin_id in admins:
+
+    # Проверяем, есть ли уже админ с таким ID
+    if any(admin["id"] == new_admin_id for admin in admins):
         return await message.answer("✅ Этот пользователь уже является админом.")
 
-    admins.append(new_admin_id)
+    # Добавляем нового админа в список
+    admins.append({"id": new_admin_id, "name": new_admin_name})
     save_admins(admins)
-    await message.answer(f"✅ Пользователь {new_admin_id} добавлен в админы.")
 
+    await message.answer(f"✅ Пользователь **{new_admin_name}** (ID: `{new_admin_id}`) добавлен в админы.")
 
 # Команда для удаления админа
 @router.message(Command("remove_admin"))
@@ -53,12 +58,16 @@ async def remove_admin(message: Message):
         return await message.answer("❌ Использование: /remove_admin [TG ID]")
 
     admins = load_admins()
-    if admin_id not in admins:
+
+    # Проверяем, есть ли админ с таким ID
+    if not any(admin["id"] == admin_id for admin in admins):
         return await message.answer("❌ Этот пользователь не является админом.")
 
-    admins.remove(admin_id)
+    # Удаляем админа из списка
+    admins = [admin for admin in admins if admin["id"] != admin_id]
     save_admins(admins)
-    await message.answer(f"✅ Пользователь {admin_id} удалён из админов.")
+
+    await message.answer(f"✅ Пользователь с ID `{admin_id}` удалён из админов.")
 
 
 # Команда для просмотра списка админов

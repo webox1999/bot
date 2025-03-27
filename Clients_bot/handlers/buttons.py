@@ -2,8 +2,12 @@
 from aiogram import Router, types, F
 from Clients_bot.handlers.start import user_phone_numbers, logger, process_phone
 from Clients_bot.handlers.orders import group_orders, show_orders_list
+from Clients_bot.utils.messaging import send_to_admins
+from Clients_bot.handlers.start import get_info
+from Clients_bot.handlers.keyboards import main_kb,back_keyboard
 from Clients_bot.config import SERVER_URL
-
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 import requests
 
 router = Router()
@@ -11,14 +15,14 @@ router = Router()
 
 # 🔹 Обработчик кнопки "🔙 Назад"
 @router.message(F.text == "🔙 Назад")
-async def back_to_main_menu(message: types.Message):
+async def back_to_main_menu(message: types.Message, state: FSMContext):
     # Получаем номер телефона клиента
     phone_number = user_phone_numbers.get(message.from_user.id)
 
     if not phone_number:
         await message.answer("⛔ Сначала введите номер телефона клиента.")
         return
-
+    await state.clear()
     await process_phone(message, phone_number)
 
 # Обработчик кнопки "🟡 Активные заказы"
@@ -69,16 +73,53 @@ async def show_completed_orders(message: types.Message):
         logger.error(f"Ошибка при запросе к API: {e}")
         await message.answer("⛔ Ошибка при получении данных о заказах.")
 
-        #Обработчик для кнопки бонусов
-@router.message(F.text == "✨ Подробнее о бонусах")
-async def show_bonus_info(message: types.Message):
-    text = (
-        "✨ *Как работает наша бонусная система?* ✨\n\n"
-        "💰 Копите бонусы при каждой покупке свыше 1000₽!\n"
-        "🎁 Используйте бонусы для оплаты любых товаров в нашем магазине.\n\n"
-        "🔹 Бонусы начисляются автоматически.\n"
-        "🔹 Оплатить покупку можно, если накоплено 200 бонусов и более.\n"
-        "🔹 1 бонус = 1 рубль скидки.\n\n"
-        "🛒 Покупайте, накапливайте и экономьте вместе с нами! 🚀"
+
+class FeedbackProblemsRequest(StatesGroup):
+    waiting_for_problem = State()
+
+@router.message(F.text == "🚨 Сообщить о проблеме")
+async def feedback_problems(message: types.Message, state: FSMContext):
+    report_problem_text = """
+    🔹 <b>Помогите нам стать лучше!</b>  
+
+    Наш бот постоянно развивается, и ваша обратная связь очень важна для нас! 💡  
+    Если вы столкнулись с проблемой, нашли ошибку или у вас есть идея, как улучшить бота – сообщите нам об этом.  
+
+    ✍️ <b>Введите сообщение с описанием проблемы и отправьте его в этот чат.</b>  
+    Мы внимательно рассмотрим ваш отзыв и постараемся исправить проблему как можно быстрее.  
+
+    <b>Спасибо, что помогаете сделать бота лучше!</b> 🚀
+    """
+
+    await message.answer(report_problem_text, parse_mode="HTML" ,reply_markup=back_keyboard )
+    await state.set_state(FeedbackProblemsRequest.waiting_for_problem)
+
+@router.message(FeedbackProblemsRequest.waiting_for_problem)
+async def process_reply(message: types.Message, state: FSMContext, bot):
+    """Отправляем текст всем админам """
+    phone_number = user_phone_numbers.get(message.from_user.id)
+    name, client_id = get_info(phone_number)
+    problem_text = message.text
+    problem_message = (
+        f"🚨 <b>Новое сообщение о проблеме!</b> 🚨\n\n"
+        f"👤 <b>Пользователь:</b> {name}\n"
+        f"🆔 <b>ID клиента:</b> {client_id}\n"
+        f"📱 <b>Telegram ID:</b> {message.from_user.id}\n\n"
+        f"📝 <b>Описание проблемы:</b>\n{problem_text}\n\n"
+        f"🔔 <b>Пожалуйста, проверьте и решите проблему как можно скорее.</b>"
     )
-    await message.answer(text, parse_mode="Markdown")
+
+    # Отправляем сообщение админу
+    await send_to_admins(bot, problem_message)
+    success_report_text = """
+    ✅ <b>Спасибо за ваш отзыв!</b>  
+
+    Мы получили ваше сообщение и постараемся разобраться с проблемой в ближайшее время.  
+    Ваш вклад помогает нам сделать бота ещё лучше! 🚀  
+
+    Если у нас появятся уточняющие вопросы, мы свяжемся с вами.  
+    <b>Спасибо, что помогаете нам развиваться!</b> 💡
+    """
+
+    await message.answer(success_report_text, parse_mode="HTML", reply_markup=main_kb(message.from_user.id))
+    await state.clear()

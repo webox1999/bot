@@ -4,7 +4,11 @@ import os
 
 user_phone_numbers = {}  # Глобальный словарь для хранения номеров телефонов
 verification_codes = {}  # {phone_number: {"code": str, "new_telegram_id": int}}
-
+user_cars_ids = {}
+user_cars_names = {}
+user_cars_vins = {}
+global_active_count = {}
+# PART_REQUESTS_FILE = "Clients_bot/data/part_requests.json"
 PART_REQUESTS_FILE = "data/part_requests.json"
 
 

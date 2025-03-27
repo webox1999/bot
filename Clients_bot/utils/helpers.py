@@ -1,6 +1,10 @@
 # utils/helpers.py
 from Clients_bot.utils.storage import load_part_requests,save_part_requests
+from Clients_bot.config import PARTS_DETAILS_FILE, PARTS_CACHE_FILE
 from datetime import datetime, timedelta
+import json
+import re
+import os
 
 def clean_phone_number(phone_number: str) -> str:
     """Очищает номер телефона, оставляя только цифры."""
@@ -83,4 +87,39 @@ def get_default_dates():
     start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
     return start_date, end_date
 
+
+def normalize_article(article):
+    """Нормализует артикул: убирает '-', пробелы и приводит к верхнему регистру."""
+    return re.sub(r'[-\s]', '', article).upper()
+
+
+def load_parts_database():
+    """Загружает базу данных из кеша или пересоздаёт его при необходимости."""
+    if os.path.exists(PARTS_CACHE_FILE):
+        # Если кеш уже есть — загружаем его
+        with open(PARTS_CACHE_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    # Если кеша нет — создаем его
+    with open(PARTS_DETAILS_FILE, "r", encoding="utf-8") as file:
+        parts_data = json.load(file)
+
+    # Создаём словарь {нормализованный_артикул: данные_о_детали}
+    parts_cache = {normalize_article(item["_id"]): item for item in parts_data}
+
+    # Сохраняем кеш в файл
+    with open(PARTS_CACHE_FILE, "w", encoding="utf-8") as file:
+        json.dump(parts_cache, file, ensure_ascii=False, indent=4)
+
+    return parts_cache
+
+
+# Глобальный кеш (загружается 1 раз при запуске)
+PARTS_CACHE = load_parts_database()
+
+
+def get_parts_details(article):
+    """Быстрый поиск артикула в кеше (O(1))"""
+    article_norm = normalize_article(article)  # Нормализуем ввод пользователя
+    return PARTS_CACHE.get(article_norm, 'Артикул не найден в базе')
 
